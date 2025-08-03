@@ -1,0 +1,221 @@
+{% extends "bybit_base.html" %}
+
+{% block title %}ホーム - Bybit Futures Shorting Backtest{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="hero-section text-center">
+    <div class="container">
+        <h1 class="display-4 mb-4">
+            <i class="fab fa-bitcoin"></i>
+            Bybit アルトコイン/USDT先物 ショートバックテスト
+        </h1>
+        <p class="lead mb-4">
+            Bybitに上場しているすべてのアルトコイン/USDT先物ペアでレバレッジ1倍ショート戦略の収益性を分析
+        </p>
+        <div class="row mt-5">
+            <div class="col-md-4">
+                <div class="d-flex align-items-center justify-content-center mb-3">
+                    <i class="fas fa-coins fa-3x text-warning me-3"></i>
+                    <div>
+                        <h5>全アルトコイン対応</h5>
+                        <p class="mb-0">Bybit上場の全アルトコイン/USDTペア</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-center justify-content-center mb-3">
+                    <i class="fas fa-chart-line fa-3x text-success me-3"></i>
+                    <div>
+                        <h5>レバレッジ1倍ショート</h5>
+                        <p class="mb-0">安全な1倍レバレッジでのショート戦略</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="d-flex align-items-center justify-content-center mb-3">
+                    <i class="fas fa-trophy fa-3x text-info me-3"></i>
+                    <div>
+                        <h5>パフォーマンス分析</h5>
+                        <p class="mb-0">リターン、リスク、ドローダウン分析</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container mt-5">
+    <div class="row">
+        <!-- シンボル一覧カード -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list"></i> 対象シンボル一覧
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p>Bybitで取引可能なすべてのアルトコイン/BTC先物ペアを確認できます。</p>
+                    
+                    <div class="mb-3">
+                        <h6>含まれるペア例:</h6>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-coins text-warning"></i> ETHUSDT - イーサリアム/USDT</li>
+                            <li><i class="fas fa-coins text-warning"></i> ADAUSDT - カルダノ/USDT</li>
+                            <li><i class="fas fa-coins text-warning"></i> DOTUSDT - ポルカドット/USDT</li>
+                            <li><i class="fas fa-coins text-warning"></i> SOLUSDT - ソラナ/USDT</li>
+                            <li><i class="fas fa-ellipsis-h text-muted"></i> その他多数のペア</li>
+                        </ul>
+                    </div>
+                    
+                    <a href="{{ url_for('list_symbols') }}" class="btn btn-primary btn-lg w-100">
+                        <i class="fas fa-search"></i> シンボル一覧を見る
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- バックテスト実行カード -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-line"></i> バックテスト実行
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <p>選択したアルトコイン/USDTペアでショート戦略のバックテストを実行します。</p>
+                    
+                    <div class="mb-3">
+                        <h6>設定可能な項目:</h6>
+                        <ul class="list-unstyled">
+                            <li><i class="fas fa-cog text-primary"></i> 対象シンボル（複数選択可）</li>
+                            <li><i class="fas fa-cog text-primary"></i> バックテスト期間（日数）</li>
+                            <li><i class="fas fa-cog text-primary"></i> レバレッジ倍率</li>
+                            <li><i class="fas fa-cog text-primary"></i> 最大同時分析シンボル数</li>
+                        </ul>
+                    </div>
+                    
+                    <a href="{{ url_for('run_backtest') }}" class="btn btn-success btn-lg w-100">
+                        <i class="fas fa-rocket"></i> バックテスト開始
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- リーダーボードカード -->
+        <div class="col-md-12 mb-4">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="fas fa-trophy"></i> ショート戦略パフォーマンス リーダーボード
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-8">
+                            <p>すべてのアルトコイン/USDTペアで自動的にショート戦略のバックテストを実行し、パフォーマンスランキングを表示します。</p>
+                            
+                            <div class="mb-3">
+                                <h6>リーダーボード機能:</h6>
+                                <ul class="list-unstyled">
+                                    <li><i class="fas fa-check text-success"></i> 全ペアの自動ショートパフォーマンステスト</li>
+                                    <li><i class="fas fa-check text-success"></i> リターン・シャープレシオ・ドローダウン分析</li>
+                                    <li><i class="fas fa-check text-success"></i> 最高収益ペアの特定</li>
+                                    <li><i class="fas fa-check text-success"></i> リスク調整後リターンの比較</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="mb-3">
+                                <i class="fas fa-chart-bar fa-4x text-warning"></i>
+                            </div>
+                            <p class="text-muted">どのアルトコインのショートが最も収益性が高いか一目で分かる！</p>
+                        </div>
+                    </div>
+                    
+                    <a href="{{ url_for('futures_leaderboard') }}" class="btn btn-warning btn-lg w-100">
+                        <i class="fas fa-trophy"></i> リーダーボードを見る
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 機能紹介 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle"></i> 主要機能・特徴
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <div class="text-center">
+                                <i class="fas fa-database fa-2x text-primary mb-2"></i>
+                                <h6>リアルタイムデータ</h6>
+                                <p class="small text-muted">Bybit公式APIから最新の先物価格データを取得</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="text-center">
+                                <i class="fas fa-chart-area fa-2x text-success mb-2"></i>
+                                <h6>ショート戦略特化</h6>
+                                <p class="small text-muted">アルトコイン下落相場での収益機会を分析</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="text-center">
+                                <i class="fas fa-shield-alt fa-2x text-info mb-2"></i>
+                                <h6>リスク管理</h6>
+                                <p class="small text-muted">レバレッジ1倍での安全なショート戦略</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <div class="text-center">
+                                <i class="fas fa-mobile-alt fa-2x text-warning mb-2"></i>
+                                <h6>使いやすいUI</h6>
+                                <p class="small text-muted">直感的な操作でバックテストを実行</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- システム情報 -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <h6 class="text-muted">データソース</h6>
+                            <p class="mb-0"><strong>Bybit Public API</strong></p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6 class="text-muted">対象市場</h6>
+                            <p class="mb-0"><strong>Altcoin/USDT Futures</strong></p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6 class="text-muted">戦略タイプ</h6>
+                            <p class="mb-0"><strong>1x Leverage Short</strong></p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6 class="text-muted">分析指標</h6>
+                            <p class="mb-0"><strong>Return, Sharpe, DD</strong></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

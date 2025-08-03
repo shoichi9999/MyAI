@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+
+{% block title %}戦略比較結果 - ビットコインバックテスト{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- ページタイトル -->
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <h2>
+                    <i class="fas fa-balance-scale"></i> 戦略比較結果
+                </h2>
+                <p class="lead mb-0">{{ num_strategies }}つの戦略比較 - {{ start_date }} から {{ end_date }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 比較結果テーブル -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-table"></i> パフォーマンス比較
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    {{ comparison_table|safe }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- サマリーカード -->
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-trophy"></i> 最高パフォーマンス
+                </h6>
+            </div>
+            <div class="card-body">
+                <div id="best-strategy-info">
+                    <p class="text-muted">結果を解析中...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-shield-alt"></i> 最低リスク
+                </h6>
+            </div>
+            <div class="card-body">
+                <div id="safest-strategy-info">
+                    <p class="text-muted">結果を解析中...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-balance-scale"></i> バランス型
+                </h6>
+            </div>
+            <div class="card-body">
+                <div id="balanced-strategy-info">
+                    <p class="text-muted">結果を解析中...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- アクションボタン -->
+<div class="row mt-4">
+    <div class="col-12 text-center">
+        <div class="card">
+            <div class="card-body">
+                <h6>次のアクション</h6>
+                <div class="btn-group" role="group">
+                    <a href="{{ url_for('strategy_comparison') }}" class="btn btn-primary">
+                        <i class="fas fa-redo"></i> 新しい比較
+                    </a>
+                    <a href="{{ url_for('run_backtest') }}" class="btn btn-success">
+                        <i class="fas fa-play-circle"></i> 詳細バックテスト
+                    </a>
+                    <button class="btn btn-info" onclick="exportResults()">
+                        <i class="fas fa-download"></i> 結果エクスポート
+                    </button>
+                    <button class="btn btn-secondary" onclick="window.print()">
+                        <i class="fas fa-print"></i> 印刷
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 実行情報 -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <h6 class="text-muted">実行時刻</h6>
+                        <p class="mb-0"><strong id="execution-time"></strong></p>
+                    </div>
+                    <div class="col-md-3">
+                        <h6 class="text-muted">比較戦略数</h6>
+                        <p class="mb-0"><strong>{{ num_strategies }}</strong></p>
+                    </div>
+                    <div class="col-md-3">
+                        <h6 class="text-muted">期間</h6>
+                        <p class="mb-0"><strong>{{ start_date }} - {{ end_date }}</strong></p>
+                    </div>
+                    <div class="col-md-3">
+                        <h6 class="text-muted">ステータス</h6>
+                        <p class="mb-0">
+                            <span class="badge bg-success">完了</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    #comparison-table {
+        font-size: 0.9rem;
+    }
+    
+    #comparison-table th {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        font-weight: bold;
+        text-align: center;
+    }
+    
+    #comparison-table td {
+        text-align: center;
+        vertical-align: middle;
+    }
+    
+    #comparison-table tr:hover {
+        background-color: rgba(102, 126, 234, 0.1);
+    }
+    
+    .best-performer {
+        background-color: rgba(40, 167, 69, 0.1) !important;
+        border-left: 4px solid #28a745;
+    }
+    
+    .worst-performer {
+        background-color: rgba(220, 53, 69, 0.1) !important;
+        border-left: 4px solid #dc3545;
+    }
+    
+    @media print {
+        .btn-group, .card-header {
+            display: none !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 実行時刻を設定
+        document.getElementById('execution-time').textContent = new Date().toLocaleString('ja-JP');
+        
+        // テーブル解析とハイライト
+        analyzeResults();
+        
+        // テーブルのソート機能
+        makeTableSortable();
+    });
+    
+    function analyzeResults() {
+        const table = document.getElementById('comparison-table');
+        if (!table) return;
+        
+        const rows = Array.from(table.querySelectorAll('tbody tr'));
+        if (rows.length === 0) return;
+        
+        try {
+            // 各指標の最高・最低を特定
+            let bestReturn = { row: null, value: -Infinity };
+            let lowestRisk = { row: null, value: Infinity };
+            let bestSharpe = { row: null, value: -Infinity };
+            
+            rows.forEach(row => {
+                const cells = row.cells;
+                if (cells.length >= 4) {
+                    // 総リターン（2列目と仮定）
+                    const returnValue = parseFloat(cells[2].textContent);
+                    if (!isNaN(returnValue) && returnValue > bestReturn.value) {
+                        bestReturn = { row: row, value: returnValue };
+                    }
+                    
+                    // 最大DD（3列目と仮定、絶対値で比較）
+                    const ddValue = Math.abs(parseFloat(cells[3].textContent));
+                    if (!isNaN(ddValue) && ddValue < lowestRisk.value) {
+                        lowestRisk = { row: row, value: ddValue };
+                    }
+                    
+                    // シャープレシオ（4列目と仮定）
+                    const sharpeValue = parseFloat(cells[4].textContent);
+                    if (!isNaN(sharpeValue) && sharpeValue > bestSharpe.value) {
+                        bestSharpe = { row: row, value: sharpeValue };
+                    }
+                }
+            });
+            
+            // ハイライト適用
+            if (bestReturn.row) {
+                bestReturn.row.classList.add('best-performer');
+            }
+            
+            // サマリー情報更新
+            if (bestReturn.row) {
+                document.getElementById('best-strategy-info').innerHTML = `
+                    <strong>${bestReturn.row.cells[0].textContent}</strong><br>
+                    <span class="text-success">リターン: ${bestReturn.value.toFixed(2)}%</span>
+                `;
+            }
+            
+            if (lowestRisk.row) {
+                document.getElementById('safest-strategy-info').innerHTML = `
+                    <strong>${lowestRisk.row.cells[0].textContent}</strong><br>
+                    <span class="text-info">最大DD: ${(-lowestRisk.value).toFixed(2)}%</span>
+                `;
+            }
+            
+            if (bestSharpe.row) {
+                document.getElementById('balanced-strategy-info').innerHTML = `
+                    <strong>${bestSharpe.row.cells[0].textContent}</strong><br>
+                    <span class="text-warning">シャープレシオ: ${bestSharpe.value.toFixed(3)}</span>
+                `;
+            }
+            
+        } catch (error) {
+            console.log('結果解析中にエラー:', error);
+        }
+    }
+    
+    function makeTableSortable() {
+        const table = document.getElementById('comparison-table');
+        if (!table) return;
+        
+        const headers = table.querySelectorAll('thead th');
+        headers.forEach((header, index) => {
+            if (index > 0) { // 戦略名以外をソート可能に
+                header.style.cursor = 'pointer';
+                header.title = 'クリックでソート';
+                
+                header.addEventListener('click', function() {
+                    sortTable(table, index);
+                });
+            }
+        });
+    }
+    
+    function sortTable(table, columnIndex) {
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        
+        const sortedRows = rows.sort((a, b) => {
+            const aValue = parseFloat(a.cells[columnIndex].textContent) || 0;
+            const bValue = parseFloat(b.cells[columnIndex].textContent) || 0;
+            return bValue - aValue; // 降順
+        });
+        
+        // テーブルを再構築
+        sortedRows.forEach(row => tbody.appendChild(row));
+        
+        // ハイライトを再適用
+        setTimeout(analyzeResults, 100);
+    }
+    
+    function exportResults() {
+        const table = document.getElementById('comparison-table');
+        if (!table) return;
+        
+        // CSV形式でエクスポート
+        let csv = '';
+        const rows = table.querySelectorAll('tr');
+        
+        rows.forEach(row => {
+            const cells = Array.from(row.cells);
+            const rowData = cells.map(cell => cell.textContent.trim()).join(',');
+            csv += rowData + '\n';
+        });
+        
+        // ダウンロード
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `strategy_comparison_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    }
+</script>
+{% endblock %}

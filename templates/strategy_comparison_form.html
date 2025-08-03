@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+
+{% block title %}戦略比較 - ビットコインバックテスト{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">
+                    <i class="fas fa-balance-scale"></i> 戦略比較設定
+                </h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <!-- 戦略選択 -->
+                        <div class="col-12 mb-4">
+                            <label class="form-label">
+                                <i class="fas fa-brain"></i> 比較する戦略を選択してください（2つ以上）
+                            </label>
+                            <div class="row">
+                                {% for strategy_id, strategy_info in strategies.items() %}
+                                <div class="col-md-6 mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" 
+                                               name="strategies" value="{{ strategy_id }}" 
+                                               id="strategy_{{ strategy_id }}">
+                                        <label class="form-check-label" for="strategy_{{ strategy_id }}">
+                                            <strong>{{ strategy_info.name }}</strong>
+                                        </label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        
+                        <!-- 期間設定 -->
+                        <div class="col-md-6 mb-3">
+                            <label for="start_date" class="form-label">
+                                <i class="fas fa-calendar-alt"></i> 開始日
+                            </label>
+                            <input type="date" class="form-control" id="start_date" 
+                                   name="start_date" value="2023-01-01" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="end_date" class="form-label">
+                                <i class="fas fa-calendar-alt"></i> 終了日
+                            </label>
+                            <input type="date" class="form-control" id="end_date" 
+                                   name="end_date" value="2024-01-01" required>
+                        </div>
+                        
+                        <!-- 初期資金 -->
+                        <div class="col-md-6 mb-3">
+                            <label for="initial_capital" class="form-label">
+                                <i class="fas fa-yen-sign"></i> 初期資金
+                            </label>
+                            <input type="number" class="form-control" id="initial_capital" 
+                                   name="initial_capital" value="1000000" min="10000" step="10000" required>
+                        </div>
+                        
+                        <!-- 手数料率 -->
+                        <div class="col-md-6 mb-3">
+                            <label for="commission_rate" class="form-label">
+                                <i class="fas fa-percentage"></i> 手数料率
+                            </label>
+                            <input type="number" class="form-control" id="commission_rate" 
+                                   name="commission_rate" value="0.001" min="0" max="0.01" step="0.0001" required>
+                        </div>
+                    </div>
+                    
+                    <!-- 実行ボタン -->
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary btn-lg" id="submit-btn">
+                                    <i class="fas fa-chart-bar"></i> 戦略比較実行
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 説明カード -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle"></i> 戦略比較について
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>複数の戦略を同じ条件（期間、初期資金、手数料率）で実行し、パフォーマンスを比較できます。</p>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>比較指標:</h6>
+                        <ul>
+                            <li>総リターン</li>
+                            <li>シャープレシオ</li>
+                            <li>最大ドローダウン</li>
+                            <li>取引回数</li>
+                            <li>Buy&Hold比較</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>注意事項:</h6>
+                        <ul>
+                            <li>各戦略はデフォルトパラメータで実行されます</li>
+                            <li>比較には少なくとも2つの戦略を選択してください</li>
+                            <li>実行時間は選択した戦略数に比例します</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // 戦略選択の検証
+    document.querySelector('form').addEventListener('submit', function(e) {
+        const selectedStrategies = document.querySelectorAll('input[name="strategies"]:checked');
+        
+        if (selectedStrategies.length < 2) {
+            e.preventDefault();
+            alert('比較するには少なくとも2つの戦略を選択してください。');
+            return false;
+        }
+        
+        // ローディング表示
+        const submitBtn = document.getElementById('submit-btn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 実行中...';
+    });
+    
+    // 戦略選択時のフィードバック
+    document.querySelectorAll('input[name="strategies"]').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const selectedCount = document.querySelectorAll('input[name="strategies"]:checked').length;
+            const submitBtn = document.getElementById('submit-btn');
+            
+            if (selectedCount < 2) {
+                submitBtn.classList.add('disabled');
+                submitBtn.innerHTML = '<i class="fas fa-chart-bar"></i> 戦略比較実行 (2つ以上選択)';
+            } else {
+                submitBtn.classList.remove('disabled');
+                submitBtn.innerHTML = `<i class="fas fa-chart-bar"></i> ${selectedCount}つの戦略を比較実行`;
+            }
+        });
+    });
+</script>
+{% endblock %}

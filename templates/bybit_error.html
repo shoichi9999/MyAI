@@ -1,0 +1,28 @@
+{% extends "bybit_base.html" %}
+
+{% block title %}エラー {{ error_code }} - Bybit Futures Shorting{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body text-center">
+                    <i class="fas fa-exclamation-triangle fa-5x text-warning mb-4"></i>
+                    <h1 class="display-4">エラー {{ error_code }}</h1>
+                    <p class="lead">{{ error_message }}</p>
+                    
+                    <div class="mt-4">
+                        <a href="{{ url_for('index') }}" class="btn btn-primary me-2">
+                            <i class="fas fa-home"></i> ホームに戻る
+                        </a>
+                        <button class="btn btn-secondary" onclick="history.back()">
+                            <i class="fas fa-arrow-left"></i> 前のページに戻る
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

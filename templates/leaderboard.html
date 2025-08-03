@@ -1,0 +1,239 @@
+{% extends "base.html" %}
+
+{% block title %}戦略リーダーボード - ビットコインバックテスト{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- Header -->
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <h1 class="display-5 mb-3">
+                    <i class="fas fa-trophy text-warning"></i>
+                    戦略パフォーマンス リーダーボード
+                </h1>
+                <p class="lead">
+                    全41戦略の過去6ヶ月間のパフォーマンス比較
+                </p>
+                
+                {% if leaderboard_data %}
+                <div class="row mt-3">
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-primary">{{ leaderboard_data.total_strategies }}</h4>
+                            <small class="text-muted">総戦略数</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-success">{{ leaderboard_data.successful_strategies }}</h4>
+                            <small class="text-muted">成功戦略数</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-info">{{ leaderboard_data.period }}</h4>
+                            <small class="text-muted">分析期間</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h4 class="text-warning">{{ leaderboard_data.generated_at[:10] }}</h4>
+                            <small class="text-muted">更新日</small>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if top_performers %}
+<!-- Top 3 Podium -->
+<div class="row mb-5">
+    <div class="col-12">
+        <h3 class="text-center mb-4">
+            <i class="fas fa-medal"></i> トップ3戦略
+        </h3>
+        <div class="row justify-content-center">
+            {% for strategy in top_performers[:3] %}
+            <div class="col-md-4 mb-3">
+                <div class="card h-100 {% if loop.index == 1 %}border-warning{% elif loop.index == 2 %}border-secondary{% else %}border-info{% endif %}">
+                    <div class="card-header text-center {% if loop.index == 1 %}bg-warning text-dark{% elif loop.index == 2 %}bg-secondary text-white{% else %}bg-info text-white{% endif %}">
+                        <h4>
+                            {% if loop.index == 1 %}
+                                <i class="fas fa-trophy"></i> 1位
+                            {% elif loop.index == 2 %}
+                                <i class="fas fa-medal"></i> 2位
+                            {% else %}
+                                <i class="fas fa-award"></i> 3位
+                            {% endif %}
+                        </h4>
+                    </div>
+                    <div class="card-body text-center">
+                        <h5 class="card-title">{{ strategy.display_name }}</h5>
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="text-center">
+                                    <h3 class="{% if strategy.total_return_pct > 0 %}text-success{% else %}text-danger{% endif %}">
+                                        {{ "%.1f"|format(strategy.total_return_pct) }}%
+                                    </h3>
+                                    <small class="text-muted">総リターン</small>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="text-center">
+                                    <h3 class="text-info">{{ "%.2f"|format(strategy.sharpe_ratio) }}</h3>
+                                    <small class="text-muted">シャープレシオ</small>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                MaxDD: {{ "%.1f"|format(strategy.max_drawdown_pct) }}% | 
+                                取引数: {{ strategy.num_trades }}
+                            </small>
+                        </div>
+                        <a href="{{ url_for('run_backtest') }}?strategy={{ strategy.strategy_name }}" 
+                           class="btn btn-primary btn-sm mt-2">
+                            <i class="fas fa-play"></i> この戦略を実行
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Full Leaderboard Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h4 class="mb-0">
+                    <i class="fas fa-list-ol"></i> 全戦略ランキング
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>順位</th>
+                                <th>戦略名</th>
+                                <th>総リターン</th>
+                                <th>シャープレシオ</th>
+                                <th>最大DD</th>
+                                <th>取引数</th>
+                                <th>勝率</th>
+                                <th>アクション</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for strategy in all_results %}
+                            <tr {% if not strategy.success %}class="table-secondary"{% endif %}>
+                                <td>
+                                    {% if strategy.success %}
+                                        {% if strategy.rank <= 3 %}
+                                            <span class="badge {% if strategy.rank == 1 %}bg-warning text-dark{% elif strategy.rank == 2 %}bg-secondary{% else %}bg-info{% endif %}">
+                                                {{ strategy.rank }}
+                                            </span>
+                                        {% else %}
+                                            {{ strategy.rank }}
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <strong>{{ strategy.display_name }}</strong>
+                                    {% if not strategy.success %}
+                                        <br><small class="text-danger">エラー: {{ strategy.error[:50] }}...</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if strategy.success %}
+                                        <span class="{% if strategy.total_return_pct > 0 %}text-success{% else %}text-danger{% endif %}">
+                                            {{ "%.1f"|format(strategy.total_return_pct) }}%
+                                        </span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if strategy.success %}
+                                        {{ "%.2f"|format(strategy.sharpe_ratio) }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if strategy.success %}
+                                        <span class="text-danger">{{ "%.1f"|format(strategy.max_drawdown_pct) }}%</span>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if strategy.success %}
+                                        {{ strategy.num_trades }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if strategy.success and strategy.win_rate > 0 %}
+                                        {{ "%.1f"|format(strategy.win_rate) }}%
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if strategy.success %}
+                                        <a href="{{ url_for('run_backtest') }}?strategy={{ strategy.strategy_name }}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-play"></i> 実行
+                                        </a>
+                                    {% else %}
+                                        <span class="text-muted">利用不可</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Refresh Button -->
+<div class="row mt-4">
+    <div class="col-12 text-center">
+        <a href="{{ url_for('api_leaderboard', cache='false') }}" 
+           class="btn btn-warning btn-lg" 
+           onclick="showRefreshMessage()">
+            <i class="fas fa-sync-alt"></i> リーダーボードを再生成
+        </a>
+        <p class="text-muted mt-2">
+            <small>※ 再生成には数分かかる場合があります</small>
+        </p>
+    </div>
+</div>
+
+<script>
+function showRefreshMessage() {
+    alert('リーダーボードの再生成を開始します。数分かかる場合があります。');
+}
+
+// Auto-refresh every 30 minutes
+setTimeout(function() {
+    location.reload();
+}, 30 * 60 * 1000);
+</script>
+
+{% endblock %}

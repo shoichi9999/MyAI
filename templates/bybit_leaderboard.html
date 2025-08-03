@@ -1,0 +1,206 @@
+{% extends "bybit_base.html" %}
+
+{% block title %}リーダーボード - Bybit Futures Shorting{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- ヘッダー -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0">
+                        <i class="fas fa-trophy"></i> 
+                        Bybit アルトコイン/USDT先物 ショート戦略パフォーマンス リーダーボード
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <h6 class="text-muted">分析期間</h6>
+                            <p class="mb-0"><strong>{{ test_period }}</strong></p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6 class="text-muted">対象ペア数</h6>
+                            <p class="mb-0"><strong>{{ total_symbols }}ペア</strong></p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6 class="text-muted">レバレッジ</h6>
+                            <p class="mb-0"><strong>{{ leverage }}倍</strong></p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6 class="text-muted">更新時刻</h6>
+                            <p class="mb-0"><strong>{{ generated_at }}</strong></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% if leaderboard_results %}
+    
+    <!-- トップ3表彰台 -->
+    {% if top_performers|length >= 3 %}
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-medal"></i> トップパフォーマー
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <!-- 2位 -->
+                        <div class="col-md-4 order-md-1">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <i class="fas fa-medal fa-3x rank-silver mb-3"></i>
+                                    <h4 class="rank-silver">2位</h4>
+                                    <h3>{{ top_performers[1].symbol }}</h3>
+                                    <p class="lead performance-positive">{{ "%.2f"|format(top_performers[1].total_return_pct) }}%</p>
+                                    <p class="small text-muted">
+                                        シャープレシオ: {{ "%.3f"|format(top_performers[1].sharpe_ratio) }}<br>
+                                        最大DD: {{ "%.2f"|format(top_performers[1].max_drawdown_pct) }}%
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 1位（中央、大きく） -->
+                        <div class="col-md-4 order-md-2">
+                            <div class="card h-100 border-warning">
+                                <div class="card-body">
+                                    <i class="fas fa-crown fa-4x rank-gold mb-3"></i>
+                                    <h2 class="rank-gold">👑 1位</h2>
+                                    <h2>{{ top_performers[0].symbol }}</h2>
+                                    <h1 class="performance-positive">{{ "%.2f"|format(top_performers[0].total_return_pct) }}%</h1>
+                                    <p class="text-muted">
+                                        シャープレシオ: {{ "%.3f"|format(top_performers[0].sharpe_ratio) }}<br>
+                                        最大DD: {{ "%.2f"|format(top_performers[0].max_drawdown_pct) }}%<br>
+                                        勝率: {{ "%.1f"|format(top_performers[0].win_rate) }}%
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 3位 -->
+                        <div class="col-md-4 order-md-3">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <i class="fas fa-medal fa-3x rank-bronze mb-3"></i>
+                                    <h4 class="rank-bronze">3位</h4>
+                                    <h3>{{ top_performers[2].symbol }}</h3>
+                                    <p class="lead performance-positive">{{ "%.2f"|format(top_performers[2].total_return_pct) }}%</p>
+                                    <p class="small text-muted">
+                                        シャープレシオ: {{ "%.3f"|format(top_performers[2].sharpe_ratio) }}<br>
+                                        最大DD: {{ "%.2f"|format(top_performers[2].max_drawdown_pct) }}%
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- サマリー統計 -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-success">最高リターン</h5>
+                    <h3 class="performance-positive">{{ "%.2f"|format(best_return) }}%</h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-info">平均リターン</h5>
+                    <h3>
+                        <span class="{{ 'performance-positive' if avg_return > 0 else 'performance-negative' }}">
+                            {{ "%.2f"|format(avg_return) }}%
+                        </span>
+                    </h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-warning">勝ちペア数</h5>
+                    <h3>
+                        {% set winning_count = leaderboard_results | selectattr('total_return_pct', '>', 0) | list | length %}
+                        {{ winning_count }}/{{ total_symbols }}
+                    </h3>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title text-danger">最大損失</h5>
+                    <h3 class="performance-negative">{{ "%.2f"|format(worst_return) }}%</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- リーダーボードテーブル -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-list-ol"></i> 完全ランキング
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>順位</th>
+                                    <th>シンボル</th>
+                                    <th>総リターン</th>
+                                    <th>シャープレシオ</th>
+                                    <th>最大DD</th>
+                                    <th>勝率</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for result in leaderboard_results %}
+                                <tr>
+                                    <td>{{ result.rank }}</td>
+                                    <td><strong>{{ result.symbol }}</strong></td>
+                                    <td>
+                                        <span class="{{ 'performance-positive' if result.total_return_pct > 0 else 'performance-negative' }}">
+                                            {{ "%.2f"|format(result.total_return_pct) }}%
+                                        </span>
+                                    </td>
+                                    <td>{{ "%.3f"|format(result.sharpe_ratio) }}</td>
+                                    <td>{{ "%.2f"|format(result.max_drawdown_pct) }}%</td>
+                                    <td>{{ "%.1f"|format(result.win_rate) }}%</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    {% else %}
+    <div class="alert alert-warning text-center">
+        <h4>リーダーボードデータがありません</h4>
+        <p>データの取得に失敗しました。</p>
+        <button class="btn btn-warning" onclick="location.reload()">再読み込み</button>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
