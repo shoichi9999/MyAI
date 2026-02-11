@@ -14,7 +14,7 @@ from config.settings import (
 from strategies.builtin import ALL_STRATEGIES
 from explorer.optimizer import AlgorithmExplorer, quick_backtest
 from backtest.engine import BacktestEngine
-from data.fetcher import get_data
+from data.fetcher import get_data, list_csv_symbols
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -46,9 +46,13 @@ def exploration_callback(result):
 
 @app.route("/")
 def index():
+    # CSVデータがあればそのシンボルを優先表示
+    csv_symbols = list_csv_symbols()
+    symbols = csv_symbols if csv_symbols else DEFAULT_SYMBOLS
     return render_template("index.html",
                            strategies=list(ALL_STRATEGIES.keys()),
-                           symbols=DEFAULT_SYMBOLS)
+                           symbols=symbols,
+                           has_csv=bool(csv_symbols))
 
 
 @app.route("/api/backtest", methods=["POST"])
@@ -131,8 +135,10 @@ def api_explore_results():
 
 @app.route("/api/symbols")
 def api_symbols():
-    """設定済みシンボルリスト"""
-    return jsonify({"symbols": DEFAULT_SYMBOLS})
+    """利用可能なシンボルリスト (CSV優先)"""
+    csv_symbols = list_csv_symbols()
+    symbols = csv_symbols if csv_symbols else DEFAULT_SYMBOLS
+    return jsonify({"symbols": symbols, "source": "csv" if csv_symbols else "default"})
 
 
 @app.route("/api/strategies")

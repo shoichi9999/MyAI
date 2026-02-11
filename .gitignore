@@ -35,6 +35,7 @@ ENV/
 # Cache files
 bybit_cache/
 data/cache/
+data/csv/
 *.csv
 *.parquet
 *_cache.json

@@ -6,7 +6,10 @@ import json
 import requests
 import pandas as pd
 from datetime import datetime, timedelta
+import glob as globmod
 from config.settings import BINANCE_BASE_URL, BINANCE_KLINES_ENDPOINT, DATA_DIR
+
+CSV_DIR = "data/csv"
 
 
 def ensure_cache_dir():
@@ -149,13 +152,68 @@ def load_cache(symbol: str, days: int, max_age_hours: int = 1) -> pd.DataFrame:
     return pd.read_parquet(path)
 
 
+def load_csv(symbol: str, days: int = None) -> pd.DataFrame:
+    """CSVファイルからデータを読み込む。
+
+    data/csv/ ディレクトリから該当シンボルのCSVを探す。
+    ファイル名パターン: {SYMBOL}_{days}d.csv or {SYMBOL}.csv
+    """
+    candidates = []
+    if days:
+        candidates.append(os.path.join(CSV_DIR, f"{symbol}_{days}d.csv"))
+    # daysなしでもマッチするファイルを探す
+    pattern = os.path.join(CSV_DIR, f"{symbol}_*.csv")
+    candidates.extend(sorted(globmod.glob(pattern), reverse=True))
+    candidates.append(os.path.join(CSV_DIR, f"{symbol}.csv"))
+
+    for path in candidates:
+        if os.path.exists(path):
+            df = pd.read_csv(path)
+            # timestamp列をdatetimeに変換
+            if "timestamp" in df.columns:
+                df["timestamp"] = pd.to_datetime(df["timestamp"])
+            if "close_time" in df.columns:
+                df["close_time"] = pd.to_datetime(df["close_time"])
+            return df
+
+    return pd.DataFrame()
+
+
+def list_csv_symbols() -> list:
+    """data/csv/ にあるCSVファイルからシンボル一覧を取得"""
+    if not os.path.exists(CSV_DIR):
+        return []
+    files = globmod.glob(os.path.join(CSV_DIR, "*.csv"))
+    symbols = set()
+    for f in files:
+        name = os.path.basename(f).replace(".csv", "")
+        # BTCUSDT_7d → BTCUSDT
+        symbol = name.split("_")[0]
+        if symbol != "_meta":
+            symbols.add(symbol)
+    return sorted(symbols)
+
+
 def get_data(symbol: str, days: int = 7, use_cache: bool = True) -> pd.DataFrame:
-    """データ取得のメインエントリーポイント。キャッシュを活用する。"""
+    """データ取得のメインエントリーポイント。
+
+    優先順位:
+    1. CSVファイル (data/csv/)
+    2. Parquetキャッシュ (data/cache/)
+    3. Binance APIから取得
+    """
+    # 1. CSVファイルをチェック
+    csv_data = load_csv(symbol, days)
+    if not csv_data.empty:
+        return csv_data
+
+    # 2. キャッシュをチェック
     if use_cache:
         cached = load_cache(symbol, days)
         if cached is not None:
             return cached
 
+    # 3. APIから取得
     df = fetch_klines_bulk(symbol, interval="1m", days=days)
     if not df.empty:
         save_cache(df, symbol, days)
