@@ -1,0 +1,184 @@
+"""Binance APIから1分足OHLCVデータを取得・キャッシュするモジュール"""
+
+import os
+import time
+import json
+import requests
+import pandas as pd
+from datetime import datetime, timedelta
+from config.settings import BINANCE_BASE_URL, BINANCE_KLINES_ENDPOINT, DATA_DIR
+
+
+def ensure_cache_dir():
+    os.makedirs(DATA_DIR, exist_ok=True)
+
+
+def fetch_klines(symbol: str, interval: str = "1m", limit: int = 1000,
+                 start_time: int = None, end_time: int = None) -> list:
+    """Binance APIから指定シンボルのローソク足データを取得する。
+
+    Args:
+        symbol: 取引ペア (例: "BTCUSDT")
+        interval: 時間足 (デフォルト: "1m")
+        limit: 取得本数 (最大1000)
+        start_time: 開始時刻 (ミリ秒UNIXタイムスタンプ)
+        end_time: 終了時刻 (ミリ秒UNIXタイムスタンプ)
+
+    Returns:
+        list of kline data
+    """
+    url = f"{BINANCE_BASE_URL}{BINANCE_KLINES_ENDPOINT}"
+    params = {
+        "symbol": symbol,
+        "interval": interval,
+        "limit": limit,
+    }
+    if start_time:
+        params["startTime"] = start_time
+    if end_time:
+        params["endTime"] = end_time
+
+    for attempt in range(4):
+        try:
+            resp = requests.get(url, params=params, timeout=30)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.RequestException as e:
+            if attempt < 3:
+                wait = 2 ** (attempt + 1)
+                time.sleep(wait)
+            else:
+                raise RuntimeError(f"Binance API error after 4 retries: {e}")
+
+
+def fetch_klines_bulk(symbol: str, interval: str = "1m",
+                      days: int = 7) -> pd.DataFrame:
+    """指定日数分の1分足データをまとめて取得する。
+
+    Binance APIは1回1000本までなので、分割リクエストする。
+    1分足 × 1000本 ≈ 16.7時間分。
+
+    Args:
+        symbol: 取引ペア
+        interval: 時間足
+        days: 取得日数
+
+    Returns:
+        pd.DataFrame with columns:
+            timestamp, open, high, low, close, volume,
+            close_time, quote_volume, trades, taker_buy_base,
+            taker_buy_quote, ignore
+    """
+    ensure_cache_dir()
+
+    end_ms = int(datetime.utcnow().timestamp() * 1000)
+    start_ms = int((datetime.utcnow() - timedelta(days=days)).timestamp() * 1000)
+
+    all_klines = []
+    current_start = start_ms
+
+    while current_start < end_ms:
+        klines = fetch_klines(
+            symbol=symbol,
+            interval=interval,
+            limit=1000,
+            start_time=current_start,
+            end_time=end_ms,
+        )
+        if not klines:
+            break
+
+        all_klines.extend(klines)
+        # 次のリクエストの開始を最後のローソク足の次に
+        current_start = klines[-1][0] + 1
+
+        # レートリミット対策
+        time.sleep(0.1)
+
+    df = _klines_to_dataframe(all_klines)
+    return df
+
+
+def _klines_to_dataframe(klines: list) -> pd.DataFrame:
+    """APIレスポンスをDataFrameに変換"""
+    if not klines:
+        return pd.DataFrame()
+
+    columns = [
+        "timestamp", "open", "high", "low", "close", "volume",
+        "close_time", "quote_volume", "trades", "taker_buy_base",
+        "taker_buy_quote", "ignore"
+    ]
+    df = pd.DataFrame(klines, columns=columns)
+
+    # 型変換
+    numeric_cols = ["open", "high", "low", "close", "volume",
+                    "quote_volume", "taker_buy_base", "taker_buy_quote"]
+    for col in numeric_cols:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    df["trades"] = df["trades"].astype(int)
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms")
+    df["close_time"] = pd.to_datetime(df["close_time"], unit="ms")
+
+    # 重複排除
+    df = df.drop_duplicates(subset=["timestamp"]).sort_values("timestamp").reset_index(drop=True)
+
+    return df
+
+
+def save_cache(df: pd.DataFrame, symbol: str, days: int):
+    """データをキャッシュとしてParquet形式で保存"""
+    ensure_cache_dir()
+    path = os.path.join(DATA_DIR, f"{symbol}_{days}d.parquet")
+    df.to_parquet(path, index=False)
+    return path
+
+
+def load_cache(symbol: str, days: int, max_age_hours: int = 1) -> pd.DataFrame:
+    """キャッシュがあれば読み込む。古ければNoneを返す"""
+    path = os.path.join(DATA_DIR, f"{symbol}_{days}d.parquet")
+    if not os.path.exists(path):
+        return None
+
+    mtime = os.path.getmtime(path)
+    age_hours = (time.time() - mtime) / 3600
+    if age_hours > max_age_hours:
+        return None
+
+    return pd.read_parquet(path)
+
+
+def get_data(symbol: str, days: int = 7, use_cache: bool = True) -> pd.DataFrame:
+    """データ取得のメインエントリーポイント。キャッシュを活用する。"""
+    if use_cache:
+        cached = load_cache(symbol, days)
+        if cached is not None:
+            return cached
+
+    df = fetch_klines_bulk(symbol, interval="1m", days=days)
+    if not df.empty:
+        save_cache(df, symbol, days)
+    return df
+
+
+def get_available_symbols() -> list:
+    """Binanceで取引可能なUSDTペアのリストを取得"""
+    url = f"{BINANCE_BASE_URL}/api/v3/exchangeInfo"
+    for attempt in range(4):
+        try:
+            resp = requests.get(url, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+            symbols = [
+                s["symbol"] for s in data["symbols"]
+                if s["quoteAsset"] == "USDT"
+                and s["status"] == "TRADING"
+                and s["isSpotTradingAllowed"]
+            ]
+            return sorted(symbols)
+        except requests.RequestException:
+            if attempt < 3:
+                time.sleep(2 ** (attempt + 1))
+            else:
+                raise

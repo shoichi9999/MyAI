@@ -1,94 +1,79 @@
-# Bybit Altcoin/USDT Futures Shorting Backtest
+# Binance Algorithm Explorer
 
-Bybitに上場しているアルトコイン/USDT先物ペアでレバレッジ1倍ショート戦略のバックテストを行うWebアプリケーション
+Binanceグローバルの取引ペアに対して、トレードアルゴリズムを自動探索・バックテストするシステム。
 
-## 🚀 特徴
+## 機能
 
-- **436個のアルトコイン/USDT先物ペア**に対応
-- **リアルタイムデータ取得** - Bybit公式API使用
-- **包括的なパフォーマンス分析** - リターン、シャープレシオ、ドローダウン等
-- **インタラクティブなリーダーボード** - 人気ペアのランキング表示
-- **レスポンシブWebデザイン** - PC・タブレット・スマホ対応
+- **1分足バックテスト** - Binance APIから取得した1分足データでリアルなシミュレーション
+- **10種類の組み込み戦略** - SMA/EMAクロス、RSI、ボリンジャーバンド、MACD、ストキャスティクス等
+- **AI自動探索** - Optunaベースのパラメータ最適化で全戦略×全シンボルを自動探索
+- **Web UI** - リアルタイムの探索状況確認、手動バックテスト、結果ランキング
+- **CLI対応** - Web UIなしでもコマンドラインから探索・バックテスト実行可能
 
-## 📊 機能
+## セットアップ
 
-### 1. シンボル一覧
-- Bybitの全アルトコイン/USDT先物ペアを表示
-- ステータス別フィルタリング
-- 検索機能付き
-
-### 2. バックテスト実行
-- 複数シンボル同時選択可能
-- カスタマイズ可能なパラメータ：
-  - バックテスト期間（1-90日）
-  - レバレッジ倍率（1-5倍）
-  - 同時分析シンボル数
-
-### 3. リーダーボード
-- 人気10ペアの自動パフォーマンス分析
-- トップ3表彰台表示
-- 詳細統計情報
-
-## 🛠️ 技術仕様
-
-- **バックエンド**: Python + Flask
-- **データソース**: Bybit Public API (LINEAR カテゴリ)
-- **時間足**: 15分足データ
-- **手数料**: 0.06%（エントリー・エグジット）
-- **フロントエンド**: Bootstrap 5 + Plotly.js
-- **キャッシュ**: 1時間キャッシュ機能
-
-## 📋 必要要件
-
-```
-Flask>=2.0.0
-pandas>=1.3.0
-numpy>=1.21.0
-requests>=2.25.0
-```
-
-## 🚀 インストール & 実行
-
-1. **リポジトリをクローン**
 ```bash
-git clone https://github.com/yourusername/bybit-futures-shorting-backtest.git
-cd bybit-futures-shorting-backtest
+pip install -r requirements.txt
 ```
 
-2. **依存関係をインストール**
+## 使い方
+
+### Web UI (推奨)
 ```bash
-pip install flask pandas numpy requests
+python run.py
+# → http://localhost:5000
 ```
 
-3. **アプリケーションを起動**
+### CLI - AI自動探索
 ```bash
-python bybit_futures_app.py
+python run.py --explore --symbol BTCUSDT --days 7 --trials 50
+python run.py --explore --symbol ALL --days 14 --trials 100
 ```
 
-4. **ブラウザでアクセス**
+### CLI - 単発バックテスト
+```bash
+python run.py --backtest --strategy SMA_Cross --symbol BTCUSDT --days 7
+python run.py --backtest --strategy RSI_MeanReversion --symbol ETHUSDT --days 14
 ```
-http://localhost:5002
+
+## 組み込み戦略
+
+| 戦略 | タイプ | 説明 |
+|------|--------|------|
+| SMA_Cross | トレンドフォロー | 単純移動平均のゴールデン/デッドクロス |
+| EMA_Cross | トレンドフォロー | 指数移動平均のクロスオーバー |
+| RSI_MeanReversion | 平均回帰 | RSIの買われすぎ/売られすぎで逆張り |
+| BollingerBand_Breakout | ブレイクアウト | ボリンジャーバンド突破で順張り |
+| BollingerBand_MeanReversion | 平均回帰 | ボリンジャーバンド到達で逆張り |
+| MACD_Strategy | トレンドフォロー | MACDラインのクロスオーバー |
+| Stochastic_Strategy | オシレーター | ストキャスティクスのK/Dクロス |
+| Triple_EMA | トレンドフォロー | 3本のEMAの配列で判断 |
+| RSI_MACD_Combo | コンボ | RSI + MACDの複合条件 |
+| ATR_Breakout | ブレイクアウト | ATRベースのボラティリティブレイク |
+
+## プロジェクト構造
+
+```
+MyAI/
+├── run.py                  # エントリーポイント
+├── config/
+│   └── settings.py         # 全体設定
+├── data/
+│   └── fetcher.py          # Binance APIデータ取得
+├── backtest/
+│   └── engine.py           # バックテストエンジン
+├── strategies/
+│   ├── base.py             # 戦略基底クラス＋インジケーター
+│   └── builtin.py          # 組み込み戦略10種
+├── explorer/
+│   └── optimizer.py        # AI自動探索エンジン (Optuna)
+├── webapp/
+│   ├── app.py              # Flask Web UI
+│   └── templates/
+│       └── index.html      # フロントエンド
+└── results/                # 探索結果JSON保存
 ```
 
-## 📈 使用例
+## 免責事項
 
-### リーダーボード結果（過去24時間）
-
-| 順位 | シンボル | ショートリターン |
-|------|----------|------------------|
-| 🥇 | CHEEMSUSDT | -1.09% |
-| 🥈 | SOLUSDT | -10.14% |
-| 🥉 | DOGEUSDT | -10.42% |
-
-*注: マイナスリターンは上昇相場でのショート戦略の正常な結果です*
-
-## ⚠️ 免責事項
-
-このソフトウェアは教育・研究目的で作成されています。
-- **投資リスク**: 暗号資産取引には高いリスクが伴います
-- **レバレッジリスク**: レバレッジ取引は損失を拡大させる可能性があります
-- **自己責任**: すべての取引判断は自己責任で行ってください
-
-## 📄 ライセンス
-
-MIT License
+このソフトウェアは教育・研究目的で作成されています。暗号資産取引には高いリスクが伴います。すべての取引判断は自己責任で行ってください。
