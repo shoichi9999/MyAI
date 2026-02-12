@@ -199,21 +199,34 @@ def get_data(symbol: str, days: int = 7, use_cache: bool = True) -> pd.DataFrame
 
     優先順位:
     1. CSVファイル (data/csv/)
-    2. Parquetキャッシュ (data/cache/)
-    3. Binance APIから取得
+    2. リモートストレージからダウンロード (manifest.json)
+    3. Parquetキャッシュ (data/cache/)
+    4. Binance APIから取得
     """
     # 1. CSVファイルをチェック
     csv_data = load_csv(symbol, days)
     if not csv_data.empty:
         return csv_data
 
-    # 2. キャッシュをチェック
+    # 2. リモートからダウンロード試行
+    try:
+        from data.remote import sync_data, list_remote_symbols
+        if symbol in list_remote_symbols():
+            result = sync_data(symbols=[symbol])
+            if result["downloaded"]:
+                csv_data = load_csv(symbol, days)
+                if not csv_data.empty:
+                    return csv_data
+    except Exception:
+        pass  # マニフェストがなければスキップ
+
+    # 3. キャッシュをチェック
     if use_cache:
         cached = load_cache(symbol, days)
         if cached is not None:
             return cached
 
-    # 3. APIから取得
+    # 4. APIから取得
     df = fetch_klines_bulk(symbol, interval="1m", days=days)
     if not df.empty:
         save_cache(df, symbol, days)
