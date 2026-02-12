@@ -176,6 +176,27 @@ git push → PR 自動作成 → 自動マージ → main に反映
 
 push するだけで `main` に反映されるため、PR の作成やマージを手動で行う必要はありません。
 
+### ローカルを最新化する
+
+自動マージ後、ローカルの `main` は古いままです。以下で最新化できます:
+
+```bash
+# main を最新化
+git checkout main
+git pull origin main
+
+# 作業ブランチに戻って main の変更を取り込む
+git checkout your-branch
+git rebase origin/main
+```
+
+または、作業ブランチから直接:
+
+```bash
+git fetch origin main
+git rebase origin/main
+```
+
 ## プロジェクト構造
 
 ```
