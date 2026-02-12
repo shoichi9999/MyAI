@@ -5,20 +5,18 @@
 [![Optuna](https://img.shields.io/badge/Optuna-Optimization-orange)](https://optuna.org)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
-Binanceグローバルの取引ペアに対して、トレードアルゴリズムを**自動探索・バックテスト**するシステム。
-Optunaによるパラメータ最適化と戦略構造の自動生成で、有望な売買ロジックを効率的に発見します。
+Binanceグローバルの取引ペアに対して、トレードアルゴリズムの**戦略構造を自動生成・探索**するシステム。
+14種類の条件ルールをOptunaで動的に組み合わせ、有望な売買ロジックを効率的に発見します。
 
 ## 主な機能
 
 | 機能 | 概要 |
 |------|------|
+| **戦略自動生成** | 14種類の条件ルールを1〜4個組み合わせ、戦略の構造自体をOptunaで自動探索 |
 | **1分足バックテスト** | Binance APIから取得した1分足データでリアルなシミュレーション |
-| **10種類の組み込み戦略** | SMA/EMAクロス、RSI、ボリンジャーバンド、MACD、ストキャスティクス等 |
-| **戦略自動生成** | 14種類の条件ルールを組み合わせ、戦略の構造自体をOptunaで自動探索 |
-| **AI自動探索** | Optunaベースのパラメータ最適化で全戦略×全シンボルを自動探索 |
-| **データパイプライン** | Binance API直接取得、CSV保存、クラウドストレージ(R2/S3/GCS)連携 |
-| **Web UI** | リアルタイムの探索状況確認、手動バックテスト、結果ランキング |
-| **CLI対応** | Web UIなしでもコマンドラインから探索・バックテスト実行可能 |
+| **データパイプライン** | Binance API直接取得、CSVローカル保存、Parquetキャッシュ |
+| **Web UI** | リアルタイムの生成状況確認、結果ブラウザ |
+| **CLI対応** | Web UIなしでもコマンドラインから戦略生成実行可能 |
 
 ## クイックスタート
 
@@ -42,21 +40,9 @@ python run.py
 # → http://localhost:5000
 ```
 
-### CLI - AI自動探索（固定戦略のパラメータ最適化）
-```bash
-python run.py --explore --symbol BTCUSDT --days 7 --trials 50
-python run.py --explore --symbol ALL --days 14 --trials 100
-```
-
-### CLI - 戦略自動生成（構造自体の探索）
+### CLI - 戦略自動生成
 ```bash
 python run.py --generate --symbol BTCUSDT --days 7 --trials 500
-```
-
-### CLI - 単発バックテスト
-```bash
-python run.py --backtest --strategy SMA_Cross --symbol BTCUSDT --days 7
-python run.py --backtest --strategy RSI_MeanReversion --symbol ETHUSDT --days 14
 ```
 
 ## データ取得
@@ -78,21 +64,6 @@ python fetch_data.py --symbol BTCUSDT ETHUSDT SOLUSDT --days 14
 # デフォルト15ペア
 python fetch_data.py --days 7
 ```
-
-## 組み込み戦略
-
-| 戦略 | タイプ | 説明 |
-|------|--------|------|
-| SMA_Cross | トレンドフォロー | 単純移動平均のゴールデン/デッドクロス |
-| EMA_Cross | トレンドフォロー | 指数移動平均のクロスオーバー |
-| RSI_MeanReversion | 平均回帰 | RSIの買われすぎ/売られすぎで逆張り |
-| BollingerBand_Breakout | ブレイクアウト | ボリンジャーバンド突破で順張り |
-| BollingerBand_MeanReversion | 平均回帰 | ボリンジャーバンド到達で逆張り |
-| MACD_Strategy | トレンドフォロー | MACDラインのクロスオーバー |
-| Stochastic_Strategy | オシレーター | ストキャスティクスのK/Dクロス |
-| Triple_EMA | トレンドフォロー | 3本のEMAの配列で判断 |
-| RSI_MACD_Combo | コンボ | RSI + MACDの複合条件 |
-| ATR_Breakout | ブレイクアウト | ATRベースのボラティリティブレイク |
 
 ## 戦略自動生成（CompositeStrategy）
 
@@ -177,10 +148,8 @@ MyAI/
 │   └── engine.py           # バックテストエンジン
 ├── strategies/
 │   ├── base.py             # 戦略基底クラス＋インジケーター
-│   ├── builtin.py          # 組み込み戦略10種
 │   └── composer.py         # 動的戦略生成 (CompositeStrategy)
 ├── explorer/
-│   ├── optimizer.py        # AI自動探索エンジン (Optuna)
 │   └── generator.py        # 戦略自動生成エンジン
 ├── webapp/
 │   ├── app.py              # Flask Web UI
