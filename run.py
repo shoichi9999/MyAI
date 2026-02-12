@@ -2,7 +2,8 @@
 
 Usage:
     python run.py              # Web UIを起動
-    python run.py --explore    # AI探索のみ実行(CLI)
+    python run.py --explore    # 固定戦略のパラメータ探索(CLI)
+    python run.py --generate   # 戦略自体を自動生成＆探索(CLI) ← NEW
     python run.py --backtest   # 単発バックテスト(CLI)
 """
 
@@ -20,15 +21,18 @@ logging.basicConfig(
 def main():
     parser = argparse.ArgumentParser(description="Binance Algorithm Explorer")
     parser.add_argument("--explore", action="store_true", help="Run AI exploration (CLI mode)")
+    parser.add_argument("--generate", action="store_true", help="Auto-generate new strategies (CLI mode)")
     parser.add_argument("--backtest", action="store_true", help="Run single backtest (CLI mode)")
     parser.add_argument("--strategy", type=str, help="Strategy name for --backtest")
-    parser.add_argument("--symbol", type=str, default="BTCUSDT", help="Symbol")
+    parser.add_argument("--symbol", type=str, default="BTCUSDT", help="Symbol (or ALL)")
     parser.add_argument("--days", type=int, default=7, help="Data period in days")
     parser.add_argument("--trials", type=int, default=50, help="Optuna trials per strategy")
     parser.add_argument("--port", type=int, default=5000, help="Web UI port")
     args = parser.parse_args()
 
-    if args.explore:
+    if args.generate:
+        run_generation(args)
+    elif args.explore:
         run_exploration(args)
     elif args.backtest:
         run_backtest(args)
@@ -43,6 +47,29 @@ def run_web(args):
     print(f"\n  Binance Algorithm Explorer")
     print(f"  http://localhost:{args.port}\n")
     app.run(host=WEB_HOST, port=args.port, debug=True)
+
+
+def run_generation(args):
+    """CLI戦略自動生成モード — 構造ごと探索"""
+    from explorer.generator import StrategyGenerator
+
+    print(f"\n=== Strategy Generation (Auto-Compose) ===")
+    print(f"Symbol: {args.symbol}")
+    print(f"Days: {args.days}")
+    print(f"Trials: {args.trials} (structure × params combined)")
+    print(f"Exploring: {len(__import__('strategies.composer', fromlist=['CONDITION_TYPES']).CONDITION_TYPES)} condition types")
+    print(f"")
+
+    generator = StrategyGenerator(
+        symbols=[args.symbol] if args.symbol != "ALL" else None,
+        days=args.days,
+    )
+
+    results = generator.run(n_trials=args.trials)
+
+    print(f"\n=== Top Generated Strategies ===")
+    generator.describe_best(5)
+    print(f"\nTotal viable strategies found: {len(results)}")
 
 
 def run_exploration(args):

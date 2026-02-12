@@ -341,6 +341,9 @@ class ATR_Breakout(BaseStrategy):
         return df
 
 
+# CompositeStrategyも利用可能にする
+from strategies.composer import CompositeStrategy
+
 # 全戦略の登録
 ALL_STRATEGIES = {
     "SMA_Cross": SMA_Cross,
@@ -353,4 +356,5 @@ ALL_STRATEGIES = {
     "Triple_EMA": Triple_EMA,
     "RSI_MACD_Combo": RSI_MACD_Combo,
     "ATR_Breakout": ATR_Breakout,
+    "Composite": CompositeStrategy,
 }
