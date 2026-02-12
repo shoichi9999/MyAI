@@ -93,11 +93,32 @@ python sync_data.py --force
 ```
 
 ### クラウドストレージへアップロード
-```bash
-# Cloudflare R2（推奨・エグレス無料）
-python upload_data.py --provider r2 --bucket my-klines --account-id YOUR_CF_ACCOUNT_ID
 
-# AWS S3
+#### Cloudflare R2 セットアップ（推奨・エグレス無料）
+
+1. [Cloudflare](https://dash.cloudflare.com/sign-up) でアカウント作成（無料）
+2. ダッシュボード左メニュー → **R2 Object Storage** → 有効化
+3. **Create bucket** でバケット作成（例: `myai-klines`、リージョンは Auto でOK）
+4. **Manage R2 API Tokens** → **Create API token**
+   - 権限: Object Read & Write
+   - 対象バケットを指定
+   - 発行される **Access Key ID** と **Secret Access Key** を控える
+5. ダッシュボード右サイドバーで **Account ID** を確認
+
+```bash
+# 環境変数をセット
+export AWS_ACCESS_KEY_ID=your-access-key
+export AWS_SECRET_ACCESS_KEY=your-secret-key
+
+# boto3 インストール（初回のみ）
+pip install boto3
+
+# アップロード実行
+python upload_data.py --provider r2 --bucket myai-klines --account-id YOUR_CF_ACCOUNT_ID
+```
+
+#### AWS S3
+```bash
 python upload_data.py --provider s3 --bucket my-klines-bucket
 ```
 
