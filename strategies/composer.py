@@ -173,68 +173,74 @@ def compute_condition(df: pd.DataFrame, cond_type: str, params: dict) -> pd.Seri
 
 
 def suggest_condition_params(trial, prefix: str, cond_type: str) -> dict:
-    """Optunaで条件パラメータを提案する"""
+    """Optunaで条件パラメータを提案する
+
+    Note: パラメータ名に cond_type を含めることで、条件タイプが変わっても
+    Optunaの分布互換性チェックに引っかからないようにする。
+    """
     p = {}
+    # 条件タイプごとにパラメータ名を一意にする
+    pfx = f"{prefix}_{cond_type}"
 
     if cond_type == "rsi_threshold":
-        p["period"] = trial.suggest_int(f"{prefix}_period", 5, 50)
-        p["threshold"] = trial.suggest_int(f"{prefix}_threshold", 15, 85)
-        p["direction"] = trial.suggest_categorical(f"{prefix}_dir", ["below", "above"])
+        p["period"] = trial.suggest_int(f"{pfx}_period", 5, 50)
+        p["threshold"] = trial.suggest_int(f"{pfx}_threshold", 15, 85)
+        p["direction"] = trial.suggest_categorical(f"{pfx}_dir", ["below", "above"])
 
     elif cond_type in ("ema_cross", "sma_cross"):
-        p["fast_period"] = trial.suggest_int(f"{prefix}_fast", 3, 50)
-        p["slow_period"] = trial.suggest_int(f"{prefix}_slow", 20, 200)
-        p["direction"] = trial.suggest_categorical(f"{prefix}_dir", ["above", "below"])
+        p["fast_period"] = trial.suggest_int(f"{pfx}_fast", 3, 50)
+        p["slow_period"] = trial.suggest_int(f"{pfx}_slow", 20, 200)
+        p["direction"] = trial.suggest_categorical(f"{pfx}_dir", ["above", "below"])
 
     elif cond_type == "bb_position":
-        p["period"] = trial.suggest_int(f"{prefix}_period", 10, 50)
-        p["std_dev"] = trial.suggest_float(f"{prefix}_std", 1.0, 3.5, step=0.1)
+        p["period"] = trial.suggest_int(f"{pfx}_period", 10, 50)
+        p["std_dev"] = trial.suggest_float(f"{pfx}_std", 1.0, 3.5, step=0.1)
         p["direction"] = trial.suggest_categorical(
-            f"{prefix}_dir", ["above_upper", "below_lower", "above_mid", "below_mid"]
+            f"{pfx}_dir", ["above_upper", "below_lower", "above_mid", "below_mid"]
         )
 
     elif cond_type in ("macd_hist_sign", "macd_cross"):
-        p["fast"] = trial.suggest_int(f"{prefix}_fast", 5, 20)
-        p["slow"] = trial.suggest_int(f"{prefix}_slow", 20, 50)
-        p["signal_period"] = trial.suggest_int(f"{prefix}_sig", 5, 15)
+        p["fast"] = trial.suggest_int(f"{pfx}_fast", 5, 20)
+        p["slow"] = trial.suggest_int(f"{pfx}_slow", 20, 50)
+        p["signal_period"] = trial.suggest_int(f"{pfx}_sig", 5, 15)
         if cond_type == "macd_hist_sign":
-            p["direction"] = trial.suggest_categorical(f"{prefix}_dir", ["positive", "negative"])
+            p["direction"] = trial.suggest_categorical(f"{pfx}_dir", ["positive", "negative"])
         else:
-            p["direction"] = trial.suggest_categorical(f"{prefix}_dir", ["above", "below"])
+            p["direction"] = trial.suggest_categorical(f"{pfx}_dir", ["above", "below"])
 
     elif cond_type == "stoch_threshold":
-        p["k_period"] = trial.suggest_int(f"{prefix}_k", 5, 30)
-        p["d_period"] = trial.suggest_int(f"{prefix}_d", 2, 7)
-        p["threshold"] = trial.suggest_int(f"{prefix}_threshold", 10, 90)
-        p["direction"] = trial.suggest_categorical(f"{prefix}_dir", ["below", "above"])
+        p["k_period"] = trial.suggest_int(f"{pfx}_k", 5, 30)
+        p["d_period"] = trial.suggest_int(f"{pfx}_d", 2, 7)
+        p["threshold"] = trial.suggest_int(f"{pfx}_threshold", 10, 90)
+        p["direction"] = trial.suggest_categorical(f"{pfx}_dir", ["below", "above"])
 
     elif cond_type == "stoch_cross":
-        p["k_period"] = trial.suggest_int(f"{prefix}_k", 5, 30)
-        p["d_period"] = trial.suggest_int(f"{prefix}_d", 2, 7)
-        p["direction"] = trial.suggest_categorical(f"{prefix}_dir", ["above", "below"])
+        p["k_period"] = trial.suggest_int(f"{pfx}_k", 5, 30)
+        p["d_period"] = trial.suggest_int(f"{pfx}_d", 2, 7)
+        p["direction"] = trial.suggest_categorical(f"{pfx}_dir", ["above", "below"])
 
     elif cond_type == "atr_breakout":
-        p["period"] = trial.suggest_int(f"{prefix}_period", 7, 30)
-        p["lookback"] = trial.suggest_int(f"{prefix}_lookback", 10, 50)
-        p["multiplier"] = trial.suggest_float(f"{prefix}_mult", 0.5, 3.0, step=0.1)
-        p["direction"] = trial.suggest_categorical(f"{prefix}_dir", ["up", "down"])
+        p["period"] = trial.suggest_int(f"{pfx}_period", 7, 30)
+        p["lookback"] = trial.suggest_int(f"{pfx}_lookback", 10, 50)
+        p["multiplier"] = trial.suggest_float(f"{pfx}_mult", 0.5, 3.0, step=0.1)
+        p["direction"] = trial.suggest_categorical(f"{pfx}_dir", ["up", "down"])
 
     elif cond_type in ("price_vs_sma", "price_vs_ema"):
-        p["period"] = trial.suggest_int(f"{prefix}_period", 5, 100)
-        p["direction"] = trial.suggest_categorical(f"{prefix}_dir", ["above", "below"])
+        p["period"] = trial.suggest_int(f"{pfx}_period", 5, 100)
+        p["direction"] = trial.suggest_categorical(f"{pfx}_dir", ["above", "below"])
 
     elif cond_type == "volume_spike":
-        p["period"] = trial.suggest_int(f"{prefix}_period", 10, 100)
-        p["multiplier"] = trial.suggest_float(f"{prefix}_mult", 1.2, 5.0, step=0.1)
+        p["period"] = trial.suggest_int(f"{pfx}_period", 10, 100)
+        p["multiplier"] = trial.suggest_float(f"{pfx}_mult", 1.2, 5.0, step=0.1)
 
     elif cond_type == "price_momentum":
-        p["period"] = trial.suggest_int(f"{prefix}_period", 5, 60)
-        p["threshold"] = trial.suggest_float(f"{prefix}_threshold", 0.001, 0.05, step=0.001)
-        p["direction"] = trial.suggest_categorical(f"{prefix}_dir", ["positive", "negative"])
+        p["period"] = trial.suggest_int(f"{pfx}_period", 5, 60)
+        p["threshold"] = trial.suggest_float(f"{pfx}_threshold", 0.001, 0.05, step=0.001)
+        p["direction"] = trial.suggest_categorical(f"{pfx}_dir", ["positive", "negative"])
 
     elif cond_type == "candle_body":
-        p["threshold"] = trial.suggest_float(f"{prefix}_threshold", 0.001, 0.02, step=0.001)
-        p["direction"] = trial.suggest_categorical(f"{prefix}_dir", ["bullish", "bearish"])
+        p["threshold"] = trial.suggest_float(f"{pfx}_threshold", 0.001, 0.02, step=0.001)
+        p["direction"] = trial.suggest_categorical(f"{pfx}_dir", ["bullish", "bearish"])
 
     return p
 
