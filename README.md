@@ -178,13 +178,18 @@ push するだけで `main` に反映されるため、PR の作成やマージ�
 
 ### ローカルを最新化する
 
-自動マージ後、ローカルの `main` は古いままです。以下で最新化できます:
+自動マージ後、ローカルの `main` は古いままです。
+**Claude Code（Web）で修正 → 自動マージされた後は、必ずローカルを最新化してから実行してください。**
 
 ```bash
-# main を最新化
+# main を最新化（最も基本的な操作）
 git checkout main
 git pull origin main
+```
 
+作業ブランチがある場合は main の変更を取り込みます:
+
+```bash
 # 作業ブランチに戻って main の変更を取り込む
 git checkout your-branch
 git rebase origin/main
@@ -196,6 +201,8 @@ git rebase origin/main
 git fetch origin main
 git rebase origin/main
 ```
+
+> **注意**: ローカルを最新化せずに実行すると、修正済みのバグが再現したり、新機能が反映されないことがあります。
 
 ## プロジェクト構造
 
