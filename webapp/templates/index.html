@@ -29,6 +29,13 @@
         .ranking-row:hover { background: #1c2128; }
         h1 { color: #f0f6fc; }
         .header-bar { background: #161b22; border-bottom: 1px solid #30363d; padding: 15px 0; margin-bottom: 25px; }
+        .pine-code { background: #010409; color: #e6edf3; font-family: 'Consolas', 'Monaco', monospace; font-size: 0.82rem; padding: 15px; border-radius: 6px; white-space: pre; overflow-x: auto; max-height: 70vh; border: 1px solid #30363d; }
+        .btn-pine { background: #1f6feb; border-color: #1f6feb; color: #fff; font-size: 0.75rem; padding: 2px 8px; }
+        .btn-pine:hover { background: #388bfd; color: #fff; }
+        .modal-content { background: #161b22; color: #c9d1d9; border: 1px solid #30363d; }
+        .modal-header { border-bottom: 1px solid #30363d; }
+        .modal-footer { border-top: 1px solid #30363d; }
+        .btn-close { filter: invert(1); }
     </style>
 </head>
 <body>
@@ -115,6 +122,7 @@
                                         <th>Win Rate</th>
                                         <th>Trades</th>
                                         <th>Max DD</th>
+                                        <th>Pine</th>
                                     </tr>
                                 </thead>
                                 <tbody id="genRanking"></tbody>
@@ -159,6 +167,7 @@
                                         <th>Win Rate</th>
                                         <th>Trades</th>
                                         <th>Max DD</th>
+                                        <th>Pine</th>
                                         <th>Timestamp</th>
                                     </tr>
                                 </thead>
@@ -173,8 +182,31 @@
     </div>
 </div>
 
+<!-- PineScript Modal -->
+<div class="modal fade" id="pineModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h6 class="modal-title" id="pineModalTitle">PineScript v5</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre class="pine-code" id="pineCode">Loading...</pre>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-outline-info" onclick="copyPineScript()">Copy to Clipboard</button>
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+// ---- Data stores for PineScript ----
+let genTopData = [];
+let resultData = [];
+
 // ---- Strategy Generation ----
 let genPollInterval = null;
 
@@ -231,6 +263,7 @@ function pollGenStatus() {
 
         // Top ranking
         const top = data.top || [];
+        genTopData = top;
         document.getElementById('genRanking').innerHTML = top.map((r, i) =>
             `<tr class="ranking-row">
                 <td>${i + 1}</td>
@@ -242,8 +275,9 @@ function pollGenStatus() {
                 <td>${r.win_rate}%</td>
                 <td>${r.total_trades}</td>
                 <td class="negative">${r.max_dd}%</td>
+                <td>${r.params ? `<button class="btn btn-pine" onclick="showPineScript(genTopData[${i}].params, genTopData[${i}].strategy)">Pine</button>` : ''}</td>
             </tr>`
-        ).join('') || '<tr><td colspan="9" class="text-center py-3">Generating...</td></tr>';
+        ).join('') || '<tr><td colspan="10" class="text-center py-3">Generating...</td></tr>';
 
         if (!data.is_running) {
             clearInterval(genPollInterval);
@@ -289,6 +323,7 @@ function loadResultFile(fname) {
             return;
         }
         const results = data.results || [];
+        resultData = results;
         document.getElementById('resultFileContent').innerHTML = results.map((r, i) =>
             `<tr class="ranking-row">
                 <td>${i + 1}</td>
@@ -301,9 +336,40 @@ function loadResultFile(fname) {
                 <td>${(r.metrics?.win_rate || 0).toFixed(1)}%</td>
                 <td>${r.metrics?.total_trades || 0}</td>
                 <td class="negative">${(r.metrics?.max_drawdown_pct || 0).toFixed(2)}%</td>
+                <td>${r.params ? `<button class="btn btn-pine" onclick="showPineScript(resultData[${i}].params, resultData[${i}].strategy)">Pine</button>` : ''}</td>
                 <td><small>${r.timestamp || ''}</small></td>
             </tr>`
-        ).join('') || '<tr><td colspan="10" class="text-center py-3">No results in this file.</td></tr>';
+        ).join('') || '<tr><td colspan="11" class="text-center py-3">No results in this file.</td></tr>';
+    });
+}
+
+// ---- PineScript ----
+function showPineScript(params, title) {
+    document.getElementById('pineCode').textContent = 'Loading...';
+    document.getElementById('pineModalTitle').textContent = 'PineScript v5 — ' + (title || 'Strategy').substring(0, 60);
+    new bootstrap.Modal(document.getElementById('pineModal')).show();
+
+    fetch('/api/pinescript', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({params, title: title || 'Generated Strategy'})
+    }).then(r => r.json()).then(data => {
+        if (data.error) {
+            document.getElementById('pineCode').textContent = 'Error: ' + data.error;
+        } else {
+            document.getElementById('pineCode').textContent = data.pinescript;
+        }
+    }).catch(e => {
+        document.getElementById('pineCode').textContent = 'Error: ' + e.message;
+    });
+}
+
+function copyPineScript() {
+    const code = document.getElementById('pineCode').textContent;
+    navigator.clipboard.writeText(code).then(() => {
+        const btn = document.querySelector('#pineModal .btn-outline-info');
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy to Clipboard'; }, 2000);
     });
 }
 

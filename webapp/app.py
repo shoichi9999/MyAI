@@ -13,6 +13,7 @@ from config.settings import (
     WEB_HOST, WEB_PORT, DEFAULT_SYMBOLS, RESULTS_DIR,
 )
 from strategies.composer import CONDITION_TYPES
+from strategies.pinescript import to_pinescript
 from explorer.generator import StrategyGenerator
 from data.fetcher import list_csv_symbols
 
@@ -40,6 +41,7 @@ def generation_callback(result):
         "total_trades": result["metrics"].get("total_trades", 0),
         "max_dd": round(result["metrics"].get("max_drawdown_pct", 0), 2),
         "description": result.get("description", ""),
+        "params": result.get("params", {}),
     }
     generator_log.append(entry)
     logger.info(f"Generated: {result['strategy']} -> {result['best_value']:.4f}")
@@ -152,6 +154,25 @@ def api_results_load():
     with open(fpath, "r") as f:
         data = json.load(f)
     return jsonify({"file": fname, "results": data})
+
+
+# ---- PineScript Converter ----
+
+@app.route("/api/pinescript", methods=["POST"])
+def api_pinescript():
+    """戦略パラメータをPineScript v5に変換"""
+    data = request.json or {}
+    params = data.get("params")
+    title = data.get("title", "Generated Strategy")
+
+    if not params:
+        return jsonify({"error": "params is required"}), 400
+
+    try:
+        code = to_pinescript(params, title=title)
+        return jsonify({"pinescript": code})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 if __name__ == "__main__":
