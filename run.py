@@ -70,6 +70,9 @@ def run_generation(args):
     print(f"\n=== Top Generated Strategies ===")
     generator.describe_best(5)
     print(f"\nTotal viable strategies found: {len(results)}")
+    if results:
+        from config.settings import RESULTS_DIR
+        print(f"Results saved to: {RESULTS_DIR}/")
 
 
 def run_exploration(args):
