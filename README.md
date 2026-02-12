@@ -6,7 +6,9 @@ Binanceグローバルの取引ペアに対して、トレードアルゴリズ�
 
 - **1分足バックテスト** - Binance APIから取得した1分足データでリアルなシミュレーション
 - **10種類の組み込み戦略** - SMA/EMAクロス、RSI、ボリンジャーバンド、MACD、ストキャスティクス等
+- **戦略自動生成** - 14種類の条件ルールを組み合わせ、戦略の構造自体をOptunaで自動探索
 - **AI自動探索** - Optunaベースのパラメータ最適化で全戦略×全シンボルを自動探索
+- **データパイプライン** - Binance API直接取得、CSV保存、クラウドストレージ(R2/S3/GCS)連携
 - **Web UI** - リアルタイムの探索状況確認、手動バックテスト、結果ランキング
 - **CLI対応** - Web UIなしでもコマンドラインから探索・バックテスト実行可能
 
@@ -24,16 +26,63 @@ python run.py
 # → http://localhost:5000
 ```
 
-### CLI - AI自動探索
+### CLI - AI自動探索（固定戦略のパラメータ最適化）
 ```bash
 python run.py --explore --symbol BTCUSDT --days 7 --trials 50
 python run.py --explore --symbol ALL --days 14 --trials 100
+```
+
+### CLI - 戦略自動生成（構造自体の探索）
+```bash
+python run.py --generate --symbol BTCUSDT --days 7 --trials 500
 ```
 
 ### CLI - 単発バックテスト
 ```bash
 python run.py --backtest --strategy SMA_Cross --symbol BTCUSDT --days 7
 python run.py --backtest --strategy RSI_MeanReversion --symbol ETHUSDT --days 14
+```
+
+## データ取得
+
+データは以下の優先順位で取得されます:
+
+1. `data/csv/` のローカルCSVファイル（最優先）
+2. リモートストレージ（`data/manifest.json` 経由）
+3. `data/cache/` のParquetキャッシュ（1時間以内）
+4. Binance APIからライブ取得（フォールバック）
+
+### Binance APIから直接取得
+```bash
+# 単一シンボル、7日分
+python fetch_data.py --symbol BTCUSDT --days 7
+
+# 複数シンボル
+python fetch_data.py --symbol BTCUSDT ETHUSDT SOLUSDT --days 14
+
+# デフォルト15ペア
+python fetch_data.py --days 7
+```
+
+### リモートストレージから同期
+```bash
+# 全シンボルをダウンロード
+python sync_data.py
+
+# 特定シンボルのみ
+python sync_data.py --symbol BTCUSDT ETHUSDT
+
+# 強制再ダウンロード
+python sync_data.py --force
+```
+
+### クラウドストレージへアップロード
+```bash
+# Cloudflare R2（推奨・エグレス無料）
+python upload_data.py --provider r2 --bucket my-klines --account-id YOUR_CF_ACCOUNT_ID
+
+# AWS S3
+python upload_data.py --provider s3 --bucket my-klines-bucket
 ```
 
 ## 組み込み戦略
@@ -51,22 +100,53 @@ python run.py --backtest --strategy RSI_MeanReversion --symbol ETHUSDT --days 14
 | RSI_MACD_Combo | コンボ | RSI + MACDの複合条件 |
 | ATR_Breakout | ブレイクアウト | ATRベースのボラティリティブレイク |
 
+## 戦略自動生成（CompositeStrategy）
+
+`--generate` モードでは、以下の14種類の条件ルールを動的に組み合わせて新しい戦略を自動生成します:
+
+| 条件タイプ | 説明 |
+|-----------|------|
+| rsi_threshold | RSI閾値による判定 |
+| ema_cross | EMAクロスオーバー |
+| sma_cross | SMAクロスオーバー |
+| bb_position | ボリンジャーバンド位置 |
+| macd_hist_sign | MACDヒストグラム符号 |
+| macd_cross | MACDクロスオーバー |
+| stoch_threshold | ストキャスティクス閾値 |
+| stoch_cross | ストキャスティクスクロス |
+| atr_breakout | ATRブレイクアウト |
+| price_vs_sma | 価格とSMAの位置関係 |
+| price_vs_ema | 価格とEMAの位置関係 |
+| volume_spike | 出来高スパイク |
+| price_momentum | 価格モメンタム |
+| candle_body | ローソク足実体 |
+
+1〜4個の条件をAND/ORロジックで組み合わせ、買い・売りそれぞれの条件を自動探索します。
+
 ## プロジェクト構造
 
 ```
 MyAI/
-├── run.py                  # エントリーポイント
+├── run.py                  # エントリーポイント (Web UI / CLI)
+├── fetch_data.py           # Binance APIからCSVデータ取得
+├── sync_data.py            # リモートストレージからデータ同期
+├── upload_data.py          # クラウドストレージへデータアップロード
 ├── config/
-│   └── settings.py         # 全体設定
+│   └── settings.py         # 全体設定（デフォルトシンボル、バックテスト条件等）
 ├── data/
-│   └── fetcher.py          # Binance APIデータ取得
+│   ├── fetcher.py          # Binance APIデータ取得 + キャッシュ管理
+│   ├── remote.py           # リモートストレージ連携 (R2/S3/GCS)
+│   ├── csv/                # CSVデータ保存先
+│   └── cache/              # Parquetキャッシュ保存先
 ├── backtest/
 │   └── engine.py           # バックテストエンジン
 ├── strategies/
 │   ├── base.py             # 戦略基底クラス＋インジケーター
-│   └── builtin.py          # 組み込み戦略10種
+│   ├── builtin.py          # 組み込み戦略10種
+│   └── composer.py         # 動的戦略生成 (CompositeStrategy)
 ├── explorer/
-│   └── optimizer.py        # AI自動探索エンジン (Optuna)
+│   ├── optimizer.py        # AI自動探索エンジン (Optuna)
+│   └── generator.py        # 戦略自動生成エンジン
 ├── webapp/
 │   ├── app.py              # Flask Web UI
 │   └── templates/
