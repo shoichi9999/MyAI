@@ -52,10 +52,16 @@
             <a class="nav-link active" data-bs-toggle="tab" href="#tab-explore">AI Explorer</a>
         </li>
         <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="tab" href="#tab-generate">Strategy Generator</a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link" data-bs-toggle="tab" href="#tab-backtest">Manual Backtest</a>
         </li>
         <li class="nav-item">
             <a class="nav-link" data-bs-toggle="tab" href="#tab-ranking">Ranking</a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link" data-bs-toggle="tab" href="#tab-results">Results</a>
         </li>
     </ul>
 
@@ -187,6 +193,78 @@
             </div>
         </div>
 
+        <!-- Strategy Generator Tab -->
+        <div class="tab-pane fade" id="tab-generate">
+            <div class="row">
+                <div class="col-lg-4">
+                    <div class="card mb-3">
+                        <div class="card-header"><h6 class="mb-0">Auto-Compose Settings</h6></div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <label class="form-label">Symbol</label>
+                                <select id="genSymbol" class="form-select">
+                                    {% for s in symbols %}
+                                    <option value="{{ s }}" {% if s == 'BTCUSDT' %}selected{% endif %}>{{ s }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Data Period (days)</label>
+                                <input type="number" id="genDays" class="form-control" value="7" min="1" max="90">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Trials (structure + params)</label>
+                                <input type="number" id="genTrials" class="form-control" value="500" min="50" max="5000" step="50">
+                            </div>
+                            <p class="text-muted small">14種類の条件ブロック (RSI, EMA, MACD, BB等) を1〜4個組み合わせ、構造ごとOptunaで最適化します。</p>
+                            <div class="d-grid gap-2">
+                                <button id="btnStartGen" class="btn btn-primary btn-lg" onclick="startGeneration()">
+                                    Start Generation
+                                </button>
+                                <button id="btnStopGen" class="btn btn-danger" onclick="stopGeneration()" style="display:none;">
+                                    Stop
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-8">
+                    <div class="card mb-3">
+                        <div class="card-header d-flex justify-content-between">
+                            <h6 class="mb-0">Generation Progress</h6>
+                            <span id="genCount" class="badge bg-info">0 strategies</span>
+                        </div>
+                        <div class="card-body">
+                            <div class="log-container" id="genLogContainer">
+                                <div class="text-muted text-center py-3">Start generation to see results...</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header"><h6 class="mb-0">Top Generated Strategies</h6></div>
+                        <div class="card-body p-0">
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Strategy</th>
+                                        <th>Symbol</th>
+                                        <th>Score</th>
+                                        <th>Return %</th>
+                                        <th>Sharpe</th>
+                                        <th>Win Rate</th>
+                                        <th>Trades</th>
+                                        <th>Max DD</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="genRanking"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Ranking Tab -->
         <div class="tab-pane fade" id="tab-ranking">
             <div class="card">
@@ -215,6 +293,51 @@
                 </div>
             </div>
         </div>
+        <!-- Results Tab -->
+        <div class="tab-pane fade" id="tab-results">
+            <div class="row">
+                <div class="col-lg-3">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">Saved Results</h6>
+                            <button class="btn btn-sm btn-outline-info" onclick="loadResultFiles()">Refresh</button>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="list-group list-group-flush" id="resultFileList">
+                                <div class="text-muted text-center py-3">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-9">
+                    <div class="card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0" id="resultFileTitle">Select a file to view</h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Strategy</th>
+                                        <th>Symbol</th>
+                                        <th>Score</th>
+                                        <th>Return %</th>
+                                        <th>Sharpe</th>
+                                        <th>Win Rate</th>
+                                        <th>Trades</th>
+                                        <th>Max DD</th>
+                                        <th>Timestamp</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="resultFileContent"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 </div>
 
@@ -380,9 +503,142 @@ function loadRanking() {
     });
 }
 
+// ---- Strategy Generation ----
+let genPollInterval = null;
+
+function startGeneration() {
+    const symbol = document.getElementById('genSymbol').value;
+    const days = parseInt(document.getElementById('genDays').value);
+    const n_trials = parseInt(document.getElementById('genTrials').value);
+
+    fetch('/api/generate/start', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({symbol, days, n_trials})
+    }).then(r => r.json()).then(data => {
+        if (data.success) {
+            document.getElementById('btnStartGen').style.display = 'none';
+            document.getElementById('btnStopGen').style.display = 'block';
+            document.getElementById('statusBadge').className = 'badge bg-warning pulse';
+            document.getElementById('statusBadge').textContent = 'Generating...';
+            startGenPolling();
+        } else {
+            alert(data.error || 'Failed to start');
+        }
+    });
+}
+
+function stopGeneration() {
+    fetch('/api/generate/stop', {method: 'POST'});
+    document.getElementById('btnStartGen').style.display = 'block';
+    document.getElementById('btnStopGen').style.display = 'none';
+}
+
+function startGenPolling() {
+    if (genPollInterval) clearInterval(genPollInterval);
+    genPollInterval = setInterval(pollGenStatus, 2000);
+}
+
+function pollGenStatus() {
+    fetch('/api/generate/status').then(r => r.json()).then(data => {
+        document.getElementById('genCount').textContent = data.results_count + ' strategies';
+
+        // Log
+        const logEl = document.getElementById('genLogContainer');
+        if (data.log.length > 0) {
+            logEl.innerHTML = data.log.map(l =>
+                `<div class="log-entry">
+                    <strong>${l.symbol}</strong>
+                    Score: <span class="${l.best_value > 0 ? 'positive' : 'negative'}">${l.best_value}</span>
+                    Return: <span class="${l.return_pct > 0 ? 'positive' : 'negative'}">${l.return_pct}%</span>
+                    Sharpe: ${l.sharpe} WR: ${l.win_rate}%
+                    <small class="text-muted">${l.strategy.substring(0, 60)}</small>
+                </div>`
+            ).reverse().join('');
+        }
+
+        // Top ranking
+        const top = data.top || [];
+        document.getElementById('genRanking').innerHTML = top.map((r, i) =>
+            `<tr class="ranking-row">
+                <td>${i + 1}</td>
+                <td><small>${r.strategy.substring(0, 50)}</small></td>
+                <td>${r.symbol}</td>
+                <td class="${r.best_value > 0 ? 'positive' : 'negative'}">${r.best_value}</td>
+                <td class="${r.return_pct > 0 ? 'positive' : 'negative'}">${r.return_pct}%</td>
+                <td>${r.sharpe}</td>
+                <td>${r.win_rate}%</td>
+                <td>${r.total_trades}</td>
+                <td class="negative">${r.max_dd}%</td>
+            </tr>`
+        ).join('') || '<tr><td colspan="9" class="text-center py-3">Generating...</td></tr>';
+
+        if (!data.is_running) {
+            clearInterval(genPollInterval);
+            document.getElementById('btnStartGen').style.display = 'block';
+            document.getElementById('btnStopGen').style.display = 'none';
+            document.getElementById('statusBadge').className = 'badge bg-secondary';
+            document.getElementById('statusBadge').textContent = 'Completed';
+        }
+    });
+}
+
+// ---- Results Browser ----
+function loadResultFiles() {
+    fetch('/api/results/files').then(r => r.json()).then(data => {
+        const files = data.files || [];
+        const el = document.getElementById('resultFileList');
+        if (files.length === 0) {
+            el.innerHTML = '<div class="text-muted text-center py-3">No saved results yet.</div>';
+            return;
+        }
+        el.innerHTML = files.map(f =>
+            `<a href="#" class="list-group-item list-group-item-action"
+                style="background:#161b22;color:#c9d1d9;border-color:#30363d;"
+                onclick="loadResultFile('${f.name}');return false;">
+                <div class="d-flex justify-content-between">
+                    <small>${f.name}</small>
+                    <span class="badge bg-secondary">${f.size_kb} KB</span>
+                </div>
+            </a>`
+        ).join('');
+    });
+}
+
+function loadResultFile(fname) {
+    document.getElementById('resultFileTitle').textContent = fname;
+    document.getElementById('resultFileContent').innerHTML =
+        '<tr><td colspan="10" class="text-center py-3">Loading...</td></tr>';
+
+    fetch('/api/results/load?file=' + encodeURIComponent(fname)).then(r => r.json()).then(data => {
+        if (data.error) {
+            document.getElementById('resultFileContent').innerHTML =
+                `<tr><td colspan="10" class="text-center py-3 negative">${data.error}</td></tr>`;
+            return;
+        }
+        const results = data.results || [];
+        document.getElementById('resultFileContent').innerHTML = results.map((r, i) =>
+            `<tr class="ranking-row">
+                <td>${i + 1}</td>
+                <td><small>${(r.strategy || '').substring(0, 50)}</small></td>
+                <td>${r.symbol || ''}</td>
+                <td class="${(r.best_value || 0) > 0 ? 'positive' : 'negative'}">${(r.best_value || 0).toFixed(4)}</td>
+                <td class="${(r.metrics?.return_pct || r.metrics?.total_return_pct || 0) > 0 ? 'positive' : 'negative'}">
+                    ${(r.metrics?.return_pct || r.metrics?.total_return_pct || 0).toFixed(2)}%</td>
+                <td>${(r.metrics?.sharpe_ratio || 0).toFixed(4)}</td>
+                <td>${(r.metrics?.win_rate || 0).toFixed(1)}%</td>
+                <td>${r.metrics?.total_trades || 0}</td>
+                <td class="negative">${(r.metrics?.max_drawdown_pct || 0).toFixed(2)}%</td>
+                <td><small>${r.timestamp || ''}</small></td>
+            </tr>`
+        ).join('') || '<tr><td colspan="10" class="text-center py-3">No results in this file.</td></tr>';
+    });
+}
+
 // Init
 loadDefaultParams();
 document.querySelector('[href="#tab-ranking"]').addEventListener('click', () => setTimeout(loadRanking, 200));
+document.querySelector('[href="#tab-results"]').addEventListener('click', () => setTimeout(loadResultFiles, 200));
 </script>
 </body>
 </html>
