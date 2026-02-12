@@ -51,13 +51,13 @@ requests>=2.25.0
 
 1. **リポジトリをクローン**
 ```bash
-git clone https://github.com/yourusername/bybit-futures-shorting-backtest.git
-cd bybit-futures-shorting-backtest
+git clone https://github.com/shoichi9999/MyAI.git
+cd MyAI
 ```
 
 2. **依存関係をインストール**
 ```bash
-pip install flask pandas numpy requests
+pip install -r requirements.txt
 ```
 
 3. **アプリケーションを起動**
