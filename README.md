@@ -64,9 +64,8 @@ python run.py --backtest --strategy RSI_MeanReversion --symbol ETHUSDT --days 14
 データは以下の優先順位で取得されます:
 
 1. `data/csv/` のローカルCSVファイル（最優先）
-2. リモートストレージ（`data/manifest.json` 経由）
-3. `data/cache/` のParquetキャッシュ（1時間以内）
-4. Binance APIからライブ取得（フォールバック）
+2. `data/cache/` のParquetキャッシュ（1時間以内）
+3. Binance APIからライブ取得（フォールバック）
 
 ### Binance APIから直接取得
 ```bash
@@ -78,48 +77,6 @@ python fetch_data.py --symbol BTCUSDT ETHUSDT SOLUSDT --days 14
 
 # デフォルト15ペア
 python fetch_data.py --days 7
-```
-
-### リモートストレージから同期
-```bash
-# 全シンボルをダウンロード
-python sync_data.py
-
-# 特定シンボルのみ
-python sync_data.py --symbol BTCUSDT ETHUSDT
-
-# 強制再ダウンロード
-python sync_data.py --force
-```
-
-### クラウドストレージへアップロード
-
-#### Cloudflare R2 セットアップ（推奨・エグレス無料）
-
-1. [Cloudflare](https://dash.cloudflare.com/sign-up) でアカウント作成（無料）
-2. ダッシュボード左メニュー → **R2 Object Storage** → 有効化
-3. **Create bucket** でバケット作成（例: `myai-klines`、リージョンは Auto でOK）
-4. **Manage R2 API Tokens** → **Create API token**
-   - 権限: Object Read & Write
-   - 対象バケットを指定
-   - 発行される **Access Key ID** と **Secret Access Key** を控える
-5. ダッシュボード右サイドバーで **Account ID** を確認
-
-```bash
-# 環境変数をセット
-export AWS_ACCESS_KEY_ID=your-access-key
-export AWS_SECRET_ACCESS_KEY=your-secret-key
-
-# boto3 インストール（初回のみ）
-pip install boto3
-
-# アップロード実行
-python upload_data.py --provider r2 --bucket myai-klines --account-id YOUR_CF_ACCOUNT_ID
-```
-
-#### AWS S3
-```bash
-python upload_data.py --provider s3 --bucket my-klines-bucket
 ```
 
 ## 組み込み戦略
@@ -210,13 +167,10 @@ git rebase origin/main
 MyAI/
 ├── run.py                  # エントリーポイント (Web UI / CLI)
 ├── fetch_data.py           # Binance APIからCSVデータ取得
-├── sync_data.py            # リモートストレージからデータ同期
-├── upload_data.py          # クラウドストレージへデータアップロード
 ├── config/
 │   └── settings.py         # 全体設定（デフォルトシンボル、バックテスト条件等）
 ├── data/
 │   ├── fetcher.py          # Binance APIデータ取得 + キャッシュ管理
-│   ├── remote.py           # リモートストレージ連携 (R2/S3/GCS)
 │   ├── csv/                # CSVデータ保存先
 │   └── cache/              # Parquetキャッシュ保存先
 ├── backtest/
