@@ -12,21 +12,15 @@ jobs:
   auto-merge:
     runs-on: ubuntu-latest
     steps:
+      - name: Wait for PR to be mergeable
+        run: sleep 5
+
       - name: Auto merge PR
         uses: actions/github-script@v7
         with:
           script: |
             const pr = context.payload.pull_request;
 
-            // Approve the PR
-            await github.rest.pulls.createReview({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: pr.number,
-              event: 'APPROVE',
-            });
-
-            // Merge the PR
             await github.rest.pulls.merge({
               owner: context.repo.owner,
               repo: context.repo.repo,
