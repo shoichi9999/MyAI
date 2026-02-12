@@ -1,6 +1,7 @@
 # Binance Algorithm Explorer
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://python.org)
+[![Flask](https://img.shields.io/badge/Flask-Web_UI-lightgrey)](https://flask.palletsprojects.com)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 Binanceグローバルの取引ペアに対して、トレードアルゴリズムを**自動探索・バックテスト**するシステム。
