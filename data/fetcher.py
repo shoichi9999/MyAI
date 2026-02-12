@@ -1,4 +1,7 @@
-"""Binance APIから1分足OHLCVデータを取得・キャッシュするモジュール"""
+"""Binance APIからOHLCVデータを取得・キャッシュするモジュール
+
+1分足固定で年単位の長期データにも対応する。
+"""
 
 import os
 import time
@@ -22,7 +25,7 @@ def fetch_klines(symbol: str, interval: str = "1m", limit: int = 1000,
 
     Args:
         symbol: 取引ペア (例: "BTCUSDT")
-        interval: 時間足 (デフォルト: "1m")
+        interval: 時間足 (デフォルト "1m")
         limit: 取得本数 (最大1000)
         start_time: 開始時刻 (ミリ秒UNIXタイムスタンプ)
         end_time: 終了時刻 (ミリ秒UNIXタイムスタンプ)
@@ -55,22 +58,19 @@ def fetch_klines(symbol: str, interval: str = "1m", limit: int = 1000,
 
 
 def fetch_klines_bulk(symbol: str, interval: str = "1m",
-                      days: int = 7) -> pd.DataFrame:
+                      days: int = 365) -> pd.DataFrame:
     """指定日数分の1分足データをまとめて取得する。
 
-    Binance APIは1回1000本までなので、分割リクエストする。
-    1分足 × 1000本 ≈ 16.7時間分。
+    1分足 × 1年 = 525,600本 → 526回のAPIリクエスト。
 
     Args:
         symbol: 取引ペア
-        interval: 時間足
-        days: 取得日数
+        interval: 時間足 (デフォルト "1m")
+        days: 取得日数 (365=1年, 730=2年, etc.)
 
     Returns:
         pd.DataFrame with columns:
-            timestamp, open, high, low, close, volume,
-            close_time, quote_volume, trades, taker_buy_base,
-            taker_buy_quote, ignore
+            timestamp, open, high, low, close, volume, ...
     """
     ensure_cache_dir()
 
@@ -79,6 +79,7 @@ def fetch_klines_bulk(symbol: str, interval: str = "1m",
 
     all_klines = []
     current_start = start_ms
+    request_count = 0
 
     while current_start < end_ms:
         klines = fetch_klines(
@@ -94,9 +95,13 @@ def fetch_klines_bulk(symbol: str, interval: str = "1m",
         all_klines.extend(klines)
         # 次のリクエストの開始を最後のローソク足の次に
         current_start = klines[-1][0] + 1
+        request_count += 1
 
-        # レートリミット対策
-        time.sleep(0.1)
+        # レートリミット対策 (長期取得時は多めに待つ)
+        if request_count % 10 == 0:
+            time.sleep(1.0)
+        else:
+            time.sleep(0.15)
 
     df = _klines_to_dataframe(all_klines)
     return df
@@ -130,19 +135,26 @@ def _klines_to_dataframe(klines: list) -> pd.DataFrame:
     return df
 
 
-def save_cache(df: pd.DataFrame, symbol: str, days: int):
+def save_cache(df: pd.DataFrame, symbol: str, days: int, interval: str = "1m"):
     """データをキャッシュとしてParquet形式で保存"""
     ensure_cache_dir()
-    path = os.path.join(DATA_DIR, f"{symbol}_{days}d.parquet")
+    path = os.path.join(DATA_DIR, f"{symbol}_{days}d_{interval}.parquet")
     df.to_parquet(path, index=False)
     return path
 
 
-def load_cache(symbol: str, days: int, max_age_hours: int = 1) -> pd.DataFrame:
-    """キャッシュがあれば読み込む。古ければNoneを返す"""
-    path = os.path.join(DATA_DIR, f"{symbol}_{days}d.parquet")
+def load_cache(symbol: str, days: int, interval: str = "1m",
+               max_age_hours: int = 1) -> pd.DataFrame:
+    """キャッシュがあれば読み込む。古ければNoneを返す。"""
+    path = os.path.join(DATA_DIR, f"{symbol}_{days}d_{interval}.parquet")
+
+    # 旧形式のキャッシュもフォールバック
     if not os.path.exists(path):
-        return None
+        old_path = os.path.join(DATA_DIR, f"{symbol}_{days}d.parquet")
+        if os.path.exists(old_path):
+            path = old_path
+        else:
+            return None
 
     mtime = os.path.getmtime(path)
     age_hours = (time.time() - mtime) / 3600
@@ -194,8 +206,15 @@ def list_csv_symbols() -> list:
     return sorted(symbols)
 
 
-def get_data(symbol: str, days: int = 7, use_cache: bool = True) -> pd.DataFrame:
+def get_data(symbol: str, days: int = 365, interval: str = "1m",
+             use_cache: bool = True) -> pd.DataFrame:
     """データ取得のメインエントリーポイント。
+
+    Args:
+        symbol: 取引ペア
+        days: 取得日数 (365=1年, 730=2年, 1095=3年)
+        interval: 時間足 (デフォルト "1m")
+        use_cache: キャッシュを使うか
 
     優先順位:
     1. CSVファイル (data/csv/)
@@ -222,14 +241,14 @@ def get_data(symbol: str, days: int = 7, use_cache: bool = True) -> pd.DataFrame
 
     # 3. キャッシュをチェック
     if use_cache:
-        cached = load_cache(symbol, days)
+        cached = load_cache(symbol, days, interval)
         if cached is not None:
             return cached
 
     # 4. APIから取得
-    df = fetch_klines_bulk(symbol, interval="1m", days=days)
+    df = fetch_klines_bulk(symbol, interval=interval, days=days)
     if not df.empty:
-        save_cache(df, symbol, days)
+        save_cache(df, symbol, days, interval)
     return df
 
 
