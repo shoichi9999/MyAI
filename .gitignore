@@ -34,8 +34,14 @@ ENV/
 
 # Cache files
 bybit_cache/
-*.csv
+data/cache/
+*.parquet
 *_cache.json
+
+# CSV (data/csv/ はgit管理する。テスト用データを共有するため)
+# data/csv/ 以外の *.csv は無視
+/*.csv
+/tmp/**/*.csv
 
 # Logs
 *.log
