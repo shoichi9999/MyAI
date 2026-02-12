@@ -139,6 +139,22 @@ python upload_data.py --provider s3 --bucket my-klines-bucket
 
 1〜4個の条件をAND/ORロジックで組み合わせ、買い・売りそれぞれの条件を自動探索します。
 
+## CI/CD（自動PR・マージ）
+
+`main` 以外のブランチに push すると、GitHub Actions が自動で PR を作成し、即座にマージします。
+
+```
+git push → PR 自動作成 → 自動マージ → main に反映
+```
+
+- **ワークフロー**: `.github/workflows/auto-merge.yml`
+- **対象**: `main` / `master` 以外の全ブランチへの push
+- **動作**: 既存の open PR があればそれを利用、なければ新規作成してマージ
+
+### 手動操作は不要
+
+push するだけで `main` に反映されるため、PR の作成やマージを手動で行う必要はありません。
+
 ## プロジェクト構造
 
 ```
