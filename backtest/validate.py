@@ -5,13 +5,14 @@ PythonバックテストとPineScriptの結果を1対1で照合するための
 詳細をCSV出力する。
 
 使い方:
-    python -m backtest.validate --symbol BTCUSDT --days 7
+    # ローカルCSVデータを使用 (TradingViewエクスポート or Binance OHLCV)
+    python -m backtest.validate --csv data/csv/BTCUSDT.csv --strategy ema_cross --fast 9 --slow 21
 
-    # EMA cross (デフォルト)
+    # Binance APIからデータ取得 (アクセス可能な場合)
     python -m backtest.validate --symbol BTCUSDT --days 7 --strategy ema_cross --fast 9 --slow 21
 
-    # RSI threshold
-    python -m backtest.validate --symbol BTCUSDT --days 7 --strategy rsi_threshold --period 14 --threshold 30
+    # TradingViewトレード一覧と自動照合
+    python -m backtest.validate --csv data/csv/BTCUSDT.csv --tv-trades tv_trades.csv --strategy ema_cross --fast 9 --slow 21
 """
 
 import argparse
@@ -29,6 +30,55 @@ from data.fetcher import get_data
 from strategies.base import (
     add_indicator_ema, add_indicator_sma, add_indicator_rsi,
 )
+
+
+# ─── データ読み込み ───────────────────────────────────
+
+def load_ohlcv_csv(path: str) -> pd.DataFrame:
+    """OHLCVデータのCSVを読み込む。
+
+    TradingViewエクスポート形式やBinanceデータなど複数フォーマットに対応。
+    必須列: timestamp (or time/date), open, high, low, close
+    """
+    df = pd.read_csv(path)
+
+    # カラム名の正規化 (小文字化)
+    df.columns = [c.strip().lower() for c in df.columns]
+
+    # timestamp列の検出
+    ts_col = None
+    for candidate in ["timestamp", "time", "date", "datetime", "open_time"]:
+        if candidate in df.columns:
+            ts_col = candidate
+            break
+    if ts_col is None:
+        raise ValueError(f"timestamp列が見つかりません。列: {list(df.columns)}")
+    if ts_col != "timestamp":
+        df = df.rename(columns={ts_col: "timestamp"})
+
+    df["timestamp"] = pd.to_datetime(df["timestamp"])
+
+    # 数値列の変換
+    for col in ["open", "high", "low", "close", "volume"]:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    if "volume" not in df.columns:
+        df["volume"] = 0
+
+    df = df.sort_values("timestamp").reset_index(drop=True)
+    return df
+
+
+def load_tv_trades_csv(path: str) -> pd.DataFrame:
+    """TradingViewのトレード一覧CSVを読み込む。
+
+    TradingViewからコピーされた形式に対応:
+    トレード番号,タイプ,日時,シグナル,価格 USDT,...
+    """
+    df = pd.read_csv(path)
+    df.columns = [c.strip() for c in df.columns]
+    return df
 
 
 # ─── シグナル生成 ──────────────────────────────────
@@ -74,6 +124,7 @@ def simulate_long_only(df: pd.DataFrame, initial_capital: float = 10000,
     position = 0.0       # 保有数量
     entry_price = 0.0
     entry_time = None
+    entry_bar = None
     in_position = False
     trades = []
     equity = [capital]
@@ -103,7 +154,7 @@ def simulate_long_only(df: pd.DataFrame, initial_capital: float = 10000,
                 trades.append({
                     "trade_no": len(trades) + 1,
                     "entry_time": str(entry_time),
-                    "entry_bar": None,  # 後で設定
+                    "entry_bar": entry_bar,
                     "entry_price": round(entry_price, 8),
                     "exit_time": str(timestamps[i]),
                     "exit_bar": i,
@@ -111,8 +162,6 @@ def simulate_long_only(df: pd.DataFrame, initial_capital: float = 10000,
                     "qty": round(position, 8),
                     "pnl": round(pnl, 4),
                     "pnl_pct": round(pnl_pct * 100, 4),
-                    "signal_bar_close": round(limit_price, 8),
-                    "fill_bar_high": round(highs[i], 8),
                 })
                 capital += pnl
                 position = 0.0
@@ -124,13 +173,11 @@ def simulate_long_only(df: pd.DataFrame, initial_capital: float = 10000,
                 filled_open = True
                 entry_price = limit_price
                 entry_time = timestamps[i]
+                entry_bar = i
                 position_value = capital
                 commission = position_value * commission_rate
                 position = (position_value - commission) / entry_price
-
-                # entry_bar を記録
-                if trades or True:
-                    entry_bar_idx = i
+                in_position = True
 
         # エクイティ計算
         if in_position:
@@ -138,14 +185,6 @@ def simulate_long_only(df: pd.DataFrame, initial_capital: float = 10000,
             equity.append(capital + unrealized)
         else:
             equity.append(capital)
-
-        if filled_open:
-            in_position = True
-            # entry_barを保存 (次のトレードのcloseで使う)
-            entry_bar_global = i
-
-        if filled_close and not in_position:
-            pass
 
     # 未決済ポジションがあれば最終足で決済
     if in_position and len(df) > 0:
@@ -156,7 +195,7 @@ def simulate_long_only(df: pd.DataFrame, initial_capital: float = 10000,
         trades.append({
             "trade_no": len(trades) + 1,
             "entry_time": str(entry_time),
-            "entry_bar": None,
+            "entry_bar": entry_bar,
             "entry_price": round(entry_price, 8),
             "exit_time": str(timestamps[-1]),
             "exit_bar": len(df) - 1,
@@ -164,8 +203,6 @@ def simulate_long_only(df: pd.DataFrame, initial_capital: float = 10000,
             "qty": round(position, 8),
             "pnl": round(pnl, 4),
             "pnl_pct": round(pnl_pct * 100, 4),
-            "signal_bar_close": round(closes[-1], 8),
-            "fill_bar_high": round(highs[-1], 8),
         })
         capital += pnl
 
@@ -230,6 +267,90 @@ plotshape(sell_signal and strategy.position_size > 0, style=shape.triangledown, 
 """
 
 
+# ─── TradingView トレード照合 ─────────────────────
+
+def compare_with_tv_trades(py_trades: list, tv_csv_path: str):
+    """PythonトレードとTradingViewトレードを自動照合する"""
+    tv_df = load_tv_trades_csv(tv_csv_path)
+
+    # TradingViewのエントリー行だけ抽出 (ロングエントリー)
+    entry_mask = tv_df["タイプ"].str.contains("エントリー", na=False)
+    exit_mask = tv_df["タイプ"].str.contains("決済", na=False)
+
+    tv_entries = tv_df[entry_mask].reset_index(drop=True)
+    tv_exits = tv_df[exit_mask].reset_index(drop=True)
+
+    print()
+    print("=" * 120)
+    print("  PYTHON vs TRADINGVIEW 照合結果")
+    print("=" * 120)
+    print(f"  Python trades: {len(py_trades)}")
+    print(f"  TV entries:    {len(tv_entries)}")
+    print(f"  TV exits:      {len(tv_exits)}")
+    print()
+
+    # トレード番号でマッチングして比較
+    max_trades = min(len(py_trades), len(tv_entries), len(tv_exits))
+
+    print(f"  {'#':>3}  {'Py Entry$':>12} {'TV Entry$':>12} {'Diff':>10}"
+          f"  {'Py Exit$':>12} {'TV Exit$':>12} {'Diff':>10}"
+          f"  {'Py PnL':>10} {'TV PnL':>10} {'Diff':>10}  {'Match':>5}")
+    print("-" * 120)
+
+    match_count = 0
+    price_match_count = 0
+    total_py_pnl = 0
+    total_tv_pnl = 0
+
+    for i in range(max_trades):
+        py = py_trades[i]
+
+        # TV側はトレード番号でソート済み前提
+        tv_entry_price = float(str(tv_entries.iloc[i]["価格 USDT"]).replace(",", ""))
+        tv_exit_price = float(str(tv_exits.iloc[i]["価格 USDT"]).replace(",", ""))
+        tv_pnl = float(str(tv_exits.iloc[i]["純損益 USDT"]).replace(",", ""))
+
+        py_entry = py["entry_price"]
+        py_exit = py["exit_price"]
+        py_pnl = py["pnl"]
+
+        entry_diff = py_entry - tv_entry_price
+        exit_diff = py_exit - tv_exit_price
+        pnl_diff = py_pnl - tv_pnl
+
+        total_py_pnl += py_pnl
+        total_tv_pnl += tv_pnl
+
+        # 価格が一致 (0.1以内) ならマッチ
+        entry_ok = abs(entry_diff) < 0.1
+        exit_ok = abs(exit_diff) < 0.1
+        prices_match = entry_ok and exit_ok
+        if prices_match:
+            price_match_count += 1
+
+        pnl_ok = abs(pnl_diff) < 1.0  # PnL は $1以内ならOK
+        all_ok = prices_match and pnl_ok
+        if all_ok:
+            match_count += 1
+
+        status = "OK" if all_ok else ("PRICE" if not prices_match else "PnL")
+
+        print(f"  {i+1:>3}  {py_entry:>12.1f} {tv_entry_price:>12.1f} {entry_diff:>+10.1f}"
+              f"  {py_exit:>12.1f} {tv_exit_price:>12.1f} {exit_diff:>+10.1f}"
+              f"  {py_pnl:>+10.2f} {tv_pnl:>+10.2f} {pnl_diff:>+10.2f}  {status:>5}")
+
+    print("-" * 120)
+    print(f"  Total:  Py PnL={total_py_pnl:+.2f}  TV PnL={total_tv_pnl:+.2f}  Diff={total_py_pnl - total_tv_pnl:+.2f}")
+    print(f"  Match: {match_count}/{max_trades} trades ({match_count/max_trades*100:.1f}%)")
+    print(f"  Price match: {price_match_count}/{max_trades} trades ({price_match_count/max_trades*100:.1f}%)")
+
+    if len(py_trades) != len(tv_entries):
+        print(f"\n  WARNING: トレード数が不一致! Python={len(py_trades)}, TV={len(tv_entries)}")
+        print("  → データ期間またはインジケータ計算の差異が原因の可能性")
+
+    print("=" * 120)
+
+
 # ─── メトリクス計算 ────────────────────────────────
 
 def calculate_metrics(trades: list, equity: pd.Series,
@@ -291,6 +412,8 @@ def main():
     parser = argparse.ArgumentParser(description="単一ロジック検証バックテスト")
     parser.add_argument("--symbol", default="BTCUSDT", help="通貨ペア")
     parser.add_argument("--days", type=int, default=7, help="データ期間(日)")
+    parser.add_argument("--csv", default=None, help="OHLCVデータのCSVファイルパス")
+    parser.add_argument("--tv-trades", default=None, help="TradingViewトレード一覧CSVパス (照合用)")
     parser.add_argument("--strategy", default="ema_cross",
                         choices=["ema_cross", "rsi_threshold"],
                         help="検証するロジック")
@@ -309,14 +432,18 @@ def main():
     args = parser.parse_args()
 
     print(f"=== 単一ロジック検証バックテスト ===")
-    print(f"Symbol: {args.symbol}")
-    print(f"Period: {args.days} days")
     print(f"Strategy: {args.strategy}")
     print()
 
     # データ取得
     print("データ取得中...")
-    df = get_data(args.symbol, days=args.days)
+    if args.csv:
+        print(f"CSV読み込み: {args.csv}")
+        df = load_ohlcv_csv(args.csv)
+    else:
+        print(f"Binance API: {args.symbol}, {args.days} days")
+        df = get_data(args.symbol, days=args.days)
+
     if df.empty:
         print("ERROR: データが取得できませんでした")
         sys.exit(1)
@@ -373,6 +500,10 @@ def main():
                   f"{exit_t:>20}  {t['exit_price']:>12.2f}  {t['pnl']:>+10.2f}  {t['pnl_pct']:>+7.2f}%")
         print("-" * 100)
 
+    # TradingViewトレードと照合
+    if args.tv_trades:
+        compare_with_tv_trades(trades, args.tv_trades)
+
     # ファイル出力
     os.makedirs(args.output_dir, exist_ok=True)
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -391,19 +522,15 @@ def main():
     print(f"    Trades CSV:  {trades_path}")
     print(f"    Signals CSV: {signals_path}")
     print(f"    PineScript:  {pine_path}")
-    print()
-    print("  PineScript (TradingViewにコピー):")
-    print("  " + "─" * 58)
-    for line in pine_code.strip().split("\n"):
-        print(f"  {line}")
-    print("  " + "─" * 58)
-    print()
-    print("  照合手順:")
-    print("  1. 上のPineScriptをTradingViewに貼り付け")
-    print(f"  2. {args.symbol} の1分足チャートに適用")
-    print(f"  3. テスター期間を {df['timestamp'].iloc[0]} ~ {df['timestamp'].iloc[-1]} に合わせる")
-    print("  4. TradingViewの「トレード一覧」とTrades CSVを比較")
-    print("  5. 差異があれば Signals CSV でインジケータ値を照合")
+
+    if not args.tv_trades:
+        print()
+        print("  照合手順:")
+        print("  1. PineScriptをTradingViewに貼り付け")
+        print(f"  2. 1分足チャートに適用")
+        print(f"  3. テスター期間を {df['timestamp'].iloc[0]} ~ {df['timestamp'].iloc[-1]} に合わせる")
+        print("  4. TradingViewの「トレード一覧」をCSVエクスポート")
+        print("  5. --tv-trades オプションでCSVパスを指定して再実行")
 
 
 if __name__ == "__main__":
