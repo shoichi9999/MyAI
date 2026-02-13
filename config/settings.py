@@ -14,8 +14,7 @@ DEFAULT_SYMBOLS = [
 # バックテスト設定
 BACKTEST_DEFAULTS = {
     "initial_capital": 10000,       # 初期資金 (USDT)
-    "commission_rate": 0.001,       # 手数料率 0.1% (maker/taker)
-    "slippage_rate": 0.0005,        # スリッページ 0.05%
+    "commission_rate": 0.0002,      # 手数料率 0.02% (maker指値)
     "leverage": 1,                  # レバレッジ倍率
     "interval": "1m",               # 1分足
     "max_position_pct": 1.0,        # 資金の最大使用割合
