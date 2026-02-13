@@ -19,7 +19,7 @@ def to_pinescript(params: dict, title: str = "Generated Strategy") -> str:
 
     lines = []
     lines.append('//@version=5')
-    lines.append(f'strategy("{_escape(title)}", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.02)')
+    lines.append(f'strategy("{_escape(title)}", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.02)')
     lines.append('')
 
     # 各条件の変数宣言
@@ -63,10 +63,12 @@ def to_pinescript(params: dict, title: str = "Generated Strategy") -> str:
 
     lines.append('')
     lines.append('// ── Entry / Exit ──')
-    lines.append('if buy_signal')
+    lines.append('// 毎足、未約定の指値注文をキャンセル (1足限りの有効期間)')
+    lines.append('strategy.cancel_all()')
+    lines.append('if buy_signal and strategy.position_size == 0')
     lines.append('    strategy.entry("Long", strategy.long, limit=close)')
-    lines.append('if sell_signal')
-    lines.append('    strategy.exit("Exit Long", "Long", limit=close)')
+    lines.append('if sell_signal and strategy.position_size > 0')
+    lines.append('    strategy.close("Long")')
     lines.append('')
     lines.append('// ── Plot ──')
     lines.append('plotshape(buy_signal, style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small, title="Buy")')
