@@ -19,7 +19,7 @@ def to_pinescript(params: dict, title: str = "Generated Strategy") -> str:
 
     lines = []
     lines.append('//@version=5')
-    lines.append(f'strategy("{_escape(title)}", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100)')
+    lines.append(f'strategy("{_escape(title)}", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.02)')
     lines.append('')
 
     # 各条件の変数宣言
@@ -62,11 +62,11 @@ def to_pinescript(params: dict, title: str = "Generated Strategy") -> str:
         lines.append(f'sell_signal = {sell_expr}')
 
     lines.append('')
-    lines.append('// ── Entry / Exit ──')
+    lines.append('// ── Entry / Exit (Limit Orders) ──')
     lines.append('if buy_signal')
-    lines.append('    strategy.entry("Long", strategy.long)')
+    lines.append('    strategy.entry("Long", strategy.long, limit=close)')
     lines.append('if sell_signal')
-    lines.append('    strategy.close("Long")')
+    lines.append('    strategy.close("Long", limit=close)')
     lines.append('')
     lines.append('// ── Plot ──')
     lines.append('plotshape(buy_signal, style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small, title="Buy")')

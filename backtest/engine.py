@@ -1,7 +1,7 @@
 """高速バックテストエンジン
 
 1分足データに対してシグナルベースのバックテストを実行する。
-手数料・スリッページを考慮した現実的なシミュレーション。
+指値注文（maker）での約定を前提としたシミュレーション。
 """
 
 import pandas as pd
@@ -34,11 +34,10 @@ class BacktestEngine:
     """シグナルベースのバックテストエンジン"""
 
     def __init__(self, initial_capital: float = None, commission_rate: float = None,
-                 slippage_rate: float = None, leverage: int = None):
+                 leverage: int = None):
         defaults = BACKTEST_DEFAULTS
         self.initial_capital = initial_capital or defaults["initial_capital"]
         self.commission_rate = commission_rate or defaults["commission_rate"]
-        self.slippage_rate = slippage_rate or defaults["slippage_rate"]
         self.leverage = leverage or defaults["leverage"]
 
     def run(self, strategy, df: pd.DataFrame, symbol: str = "") -> BacktestResult:
@@ -75,7 +74,13 @@ class BacktestEngine:
         )
 
     def _simulate(self, df: pd.DataFrame):
-        """シグナルに基づくトレードシミュレーション"""
+        """指値注文によるトレードシミュレーション
+
+        シグナル足のclose価格で指値注文を発注し、次の足で約定判定する。
+        - 買い指値: 次の足の low <= 指値価格 なら約定
+        - 売り指値: 次の足の high >= 指値価格 なら約定
+        - 約定しなければ注文はキャンセル (1足限りの有効期間)
+        """
         capital = self.initial_capital
         position = 0        # 現在のポジション数量
         direction = 0       # 1=long, -1=short, 0=flat
@@ -85,45 +90,67 @@ class BacktestEngine:
         equity = [capital]
 
         signals = df["signal"].values
-        opens = df["open"].values
         closes = df["close"].values
+        highs = df["high"].values
+        lows = df["low"].values
         timestamps = df["timestamp"].values
 
+        # 保留中の指値注文
+        pending_close_price = 0.0   # 指値価格 (前の足のclose)
+        pending_signal = 0          # 保留シグナル
+
         for i in range(1, len(df)):
-            signal = signals[i - 1]  # 前の足のシグナルで次の足のオープンで執行
-            price = opens[i]         # 次の足の始値で執行
+            prev_signal = signals[i - 1]
+            limit_price = closes[i - 1]  # シグナル足のclose = 指値価格
 
-            # ポジションクローズ判定
-            if direction != 0 and signal != direction and signal != 0:
-                # クローズ
-                exit_price = self._apply_slippage(price, -direction)
-                commission = abs(position) * exit_price * self.commission_rate
-                pnl = direction * position * (exit_price - entry_price) - commission
-                pnl_pct = pnl / (abs(position) * entry_price) if entry_price > 0 else 0
+            filled_close = False
+            filled_open = False
 
-                trades.append(Trade(
-                    entry_time=entry_time,
-                    exit_time=timestamps[i],
-                    direction=direction,
-                    entry_price=entry_price,
-                    exit_price=exit_price,
-                    size=position,
-                    pnl=pnl,
-                    pnl_pct=pnl_pct,
-                ))
-                capital += pnl
-                position = 0
-                direction = 0
+            # ── ポジションクローズの指値約定判定 ──
+            if direction != 0 and prev_signal != direction and prev_signal != 0:
+                # 売り指値 (ロング決済): high >= limit_price で約定
+                # 買い指値 (ショート決済): low <= limit_price で約定
+                if direction == 1 and highs[i] >= limit_price:
+                    filled_close = True
+                elif direction == -1 and lows[i] <= limit_price:
+                    filled_close = True
 
-            # ポジションオープン判定
-            if direction == 0 and signal != 0:
-                direction = signal
-                entry_price = self._apply_slippage(price, direction)
-                entry_time = timestamps[i]
-                # ポジションサイズ計算 (レバレッジ考慮)
-                position_value = capital * self.leverage
-                commission = position_value * self.commission_rate
-                position = (position_value - commission) / entry_price
+                if filled_close:
+                    exit_price = limit_price
+                    commission = abs(position) * exit_price * self.commission_rate
+                    pnl = direction * position * (exit_price - entry_price) - commission
+                    pnl_pct = pnl / (abs(position) * entry_price) if entry_price > 0 else 0
+
+                    trades.append(Trade(
+                        entry_time=entry_time,
+                        exit_time=timestamps[i],
+                        direction=direction,
+                        entry_price=entry_price,
+                        exit_price=exit_price,
+                        size=position,
+                        pnl=pnl,
+                        pnl_pct=pnl_pct,
+                    ))
+                    capital += pnl
+                    position = 0
+                    direction = 0
+
+            # ── ポジションオープンの指値約定判定 ──
+            if direction == 0 and prev_signal != 0:
+                # 買い指値: low <= limit_price で約定
+                # 売り指値: high >= limit_price で約定
+                if prev_signal == 1 and lows[i] <= limit_price:
+                    filled_open = True
+                elif prev_signal == -1 and highs[i] >= limit_price:
+                    filled_open = True
+
+                if filled_open:
+                    direction = prev_signal
+                    entry_price = limit_price
+                    entry_time = timestamps[i]
+                    position_value = capital * self.leverage
+                    commission = position_value * self.commission_rate
+                    position = (position_value - commission) / entry_price
 
             # 含み損益を反映したエクイティ
             if direction != 0:
@@ -132,7 +159,7 @@ class BacktestEngine:
             else:
                 equity.append(capital)
 
-        # 最後にポジションが残っていればクローズ
+        # 最後にポジションが残っていればclose価格で決済
         if direction != 0 and len(df) > 0:
             exit_price = closes[-1]
             commission = abs(position) * exit_price * self.commission_rate
@@ -152,10 +179,6 @@ class BacktestEngine:
 
         equity_series = pd.Series(equity)
         return trades, equity_series
-
-    def _apply_slippage(self, price: float, direction: int) -> float:
-        """スリッページを適用。買いなら高くなり、売りなら安くなる。"""
-        return price * (1 + direction * self.slippage_rate)
 
     def _calculate_metrics(self, trades: list, equity: pd.Series) -> dict:
         """パフォーマンスメトリクスを計算"""
