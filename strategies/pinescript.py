@@ -68,7 +68,7 @@ def to_pinescript(params: dict, title: str = "Generated Strategy") -> str:
     lines.append('if buy_signal and strategy.position_size == 0')
     lines.append('    strategy.entry("Long", strategy.long, limit=close)')
     lines.append('if sell_signal and strategy.position_size > 0')
-    lines.append('    strategy.close("Long")')
+    lines.append('    strategy.order("Exit Long", strategy.short, qty=strategy.position_size, limit=close)')
     lines.append('')
     lines.append('// ── Plot ──')
     lines.append('plotshape(buy_signal, style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small, title="Buy")')
