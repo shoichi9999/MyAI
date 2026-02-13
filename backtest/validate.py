@@ -56,7 +56,22 @@ def load_ohlcv_csv(path: str) -> pd.DataFrame:
     if ts_col != "timestamp":
         df = df.rename(columns={ts_col: "timestamp"})
 
-    df["timestamp"] = pd.to_datetime(df["timestamp"])
+    # タイムスタンプ変換: 数値ならUnix秒/ミリ秒として処理
+    ts_sample = df["timestamp"].iloc[0]
+    if pd.api.types.is_numeric_dtype(df["timestamp"]) or (
+        isinstance(ts_sample, str) and ts_sample.replace(".", "").replace("-", "").isdigit()
+        and len(ts_sample.split("-")) <= 1  # ハイフン区切りの日付ではない
+    ):
+        ts_numeric = pd.to_numeric(df["timestamp"], errors="coerce")
+        if ts_numeric.iloc[0] > 1e12:
+            # ミリ秒 (Binance形式: 1770889680000)
+            df["timestamp"] = pd.to_datetime(ts_numeric, unit="ms", utc=True)
+        else:
+            # 秒 (Unix秒: 1770889680)
+            df["timestamp"] = pd.to_datetime(ts_numeric, unit="s", utc=True)
+        df["timestamp"] = df["timestamp"].dt.tz_localize(None)
+    else:
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
 
     # 数値列の変換
     for col in ["open", "high", "low", "close", "volume"]:
